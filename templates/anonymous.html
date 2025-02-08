@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 720px;
+        }
+
+        .profile-container {
+            background-color: #fefbff;
+            padding: 30px;
+            border-radius: 10px;
+            min-width: 100%;
+        }
+
+        .profile-header {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            margin-bottom: 40px;
+            background-color: #dbe2f9;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .profile-info {
+            flex-grow: 1;
+        }
+
+        .username {
+            font-weight: bold;
+            font-size: 46px;
+        }
+
+        .content {
+            font-size: 40px;
+            line-height: 1.5;
+            word-break: break-all;
+            margin: 10px;
+        }
+
+        .content img {
+            max-width: 100%;
+            border-radius: 15px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="profile-container">
+        <div class="profile-header">
+            <div class="profile-info">
+                <p class="username">匿名</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <p>
+                {% for item in contents %}
+                {% if item.startswith('file://') %}
+                <img src="{{ item }}" alt="图片跑路了">
+                {% elif item.startswith('face://')%}
+                <img src="file://{{ item[7:] }}" alt="">
+                {% else %}
+                {{ item }}
+                {% endif %}
+                {% endfor %}
+            </p>
+        </div>
+
+        <br>
+        <div style="display: flex; justify-content: space-between;">
+            <p> {{ date }}</p>
+            <p>Designed by Web Art Online</p>
+        </div>
+
+    </div>
+</body>
+
+</html>

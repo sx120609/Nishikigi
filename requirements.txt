@@ -1,0 +1,7 @@
+git+https://github.com/Web-Art-Online/BotX
+peewee
+fastapi
+uvicorn
+httpx
+jinja2
+playwright
