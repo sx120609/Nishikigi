@@ -2,3 +2,5 @@ __pycache__
 data
 *.db
 .DS_STORE
+upload.sh
+.rsync-exclude
