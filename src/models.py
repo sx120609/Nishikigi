@@ -25,6 +25,9 @@ class Article(Model):
 
     class Meta:
         database = db
+        
+    def __str__(self):
+        return f"#{self.id}"
 
 
 Article.create_table(safe=True)

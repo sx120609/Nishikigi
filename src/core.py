@@ -11,6 +11,8 @@ import random
 import traceback
 import utils
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 from botx import Bot
 from botx.models import PrivateMessage, GroupMessage, User, PrivateRecall, FriendAdd
 from fastapi import FastAPI, Request, HTTPException
@@ -29,7 +31,10 @@ sessions: dict[User, Session] = {}
 token = hex(random.randint(0, 2 << 128))[2:]
 start_time = time.time()
 
+# 管理的一些操作要上锁
 lock = asyncio.Lock()
+
+scheduler = AsyncIOScheduler()
 
 def get_file_url(path: str):
     return f"http://{config.HOST}:{config.PORT}/image?p={path}&t={token}"
@@ -231,7 +236,7 @@ async def accept(msg: GroupMessage):
                 await msg.reply(f"投稿 #{id} 已经单发")
                 continue
             else:
-                await bot.send_private(article.sender_id, f"您的投稿 #{article.id} 已通过审核, 正在队列中等待发送")
+                await bot.send_private(article.sender_id, f"您的投稿 {article} 已通过审核, 正在队列中等待发送")
             flag = True
             Article.update({Article.tid: "queue"}).where(Article.id == id).execute()
 
@@ -261,7 +266,7 @@ async def refuse(msg: GroupMessage):
         reason = parts[2:]
         article = Article.get_or_none((Article.id == id) & (Article.tid == "wait"))
         if article == None:
-            await msg.reply(f"投稿{id}不存在或已通过审核")
+            await msg.reply(f"投稿 #{id} 不存在或已通过审核")
             return
 
         # 保留证据
@@ -305,13 +310,23 @@ async def view(msg: GroupMessage):
     
     ids = parts[1:]
     for id in ids:
-        if not os.path.exists(f"./data/{id}/image.png"):
+        article = Article.get_or_none(Article.id == id)
+        if not article or not os.path.exists(f"./data/{id}/image.png"):
             await msg.reply(f"投稿 #{id} 不存在")
             return
-        article = Article.get_or_none(Article.id == id)
+        
+        status = article.tid
+        if article.tid == "wait":
+            status = "待审核"
+        elif article.tid == "queue":
+            status = "待发送"
+        elif article.tid == "refused":
+            status = "已驳回"
+            
         await msg.reply(
             f"#{id} 用户 {article.sender_name}({article.sender_id}) {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n" + 
-            f"[CQ:image,file={get_file_url(f"./data/{id}/image.png")}]",
+            f"[CQ:image,file={get_file_url(f"./data/{id}/image.png")}]" + 
+            f"状态: {status}",
         )
 
 @bot.on_cmd("状态", help_msg="查看队列状态", targets=[config.GROUP])
@@ -368,3 +383,19 @@ async def update_name():
     queue = Article.select().where(Article.tid == "queue")
     await bot.call_api("set_group_card", {"group_id": config.GROUP, "user_id": bot.me.user_id, 
                                           "card": f"待审核: {utils.to_list(waiting)}\n待推送: {utils.to_list(queue)}"})
+    
+@scheduler.scheduled_job(IntervalTrigger(hours=1))
+async def clear():
+    async with lock:
+        for sess in sessions:
+            a = Article.get_by_id(sessions[sess].id)
+            time = (datetime.now() - a.time).total_seconds()
+
+            if time > 60 * 60 * 2:
+                sessions.pop(sess)
+                Article.delete_by_id(a.id)
+                shutil.rmtree(f"./data/{a.id}")
+                
+                await bot.send_private(sess.user_id, f"您的投稿 {a} 因为超时而被自动取消.")
+                await bot.send_group(config.GROUP, f"用户 {sess.user_id} 的投稿 {a} 因超时而被自动取消.")
+                bot.getLogger().warning(f"取消用户 {sess.user_id} 的投稿 {a}")
