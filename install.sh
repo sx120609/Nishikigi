@@ -1,3 +1,1 @@
-pip install -r requirements.txt --upgrade
-
-playwright install chromium
+uv run playwright install chromium-headless-shell

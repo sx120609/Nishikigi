@@ -286,7 +286,7 @@ async def refuse(msg: GroupMessage):
     async with lock:
         parts = msg.raw_message.split(" ")
         if len(parts) < 3:
-            await msg.reply("请带上要通过的投稿和理由")
+            await msg.reply("请带上要驳回的投稿和理由")
             return
 
         id = parts[1]
