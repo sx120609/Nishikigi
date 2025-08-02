@@ -1,0 +1,19 @@
+[project]
+name = "nishikigi"
+version = "0.1.0"
+description = "A Qzone bot"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "apscheduler>=3.11.0",
+    "botx",
+    "fastapi>=0.116.1",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "peewee>=3.18.2",
+    "playwright>=1.54.0",
+    "uvicorn>=0.35.0",
+]
+
+[tool.uv.sources]
+botx = { git = "https://github.com/Web-Art-Online/BotX" }

@@ -4,3 +4,4 @@ data
 .DS_STORE
 upload.sh
 .rsync-exclude
+.vscode

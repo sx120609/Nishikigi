@@ -1,8 +1,0 @@
-git+https://github.com/Web-Art-Online/BotX
-apscheduler
-peewee
-fastapi
-uvicorn
-httpx
-jinja2
-playwright
