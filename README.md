@@ -5,7 +5,7 @@
 > 推荐搭配 [Napcat](https://github.com/NapNeko/NapCatQQ) 使用
 
 # 使用
-1. 修改 `src/config.py`
+1. 修改 `src/config.py` 和 `.env`
 2. 新建虚拟环境
 3. 安装依赖 `$ ./install.sh`
 4. `$ ./run.sh &`

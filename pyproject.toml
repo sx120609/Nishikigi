@@ -12,6 +12,7 @@ dependencies = [
     "jinja2>=3.1.6",
     "peewee>=3.18.2",
     "playwright>=1.54.0",
+    "python-dotenv>=1.1.1",
     "uvicorn>=0.35.0",
 ]
 

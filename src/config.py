@@ -1,9 +1,14 @@
-# 审核群
-GROUP = 0
+import os
+import dotenv
 
-WS_URL = "ws://localhost:6666"
-ACCESS_TOKEN = None
-NAME = "Test"
+dotenv.load_dotenv()
+
+# 审核群
+GROUP = int(os.getenv("GROUP"))
+
+WS_URL = os.getenv("WS_URL")
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+NAME = os.getenv("NAME")
 
 # 用于获取图片等的 FastAPI 服务
 HOST = "localhost"

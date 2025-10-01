@@ -109,17 +109,20 @@ async def end(msg: PrivateMessage):
     await msg.reply("正在生成预览图🚀\n请稍等片刻")
     ses = sessions[msg.sender]
 
-    for m in ses.contents:
-        if m["type"] == "image":
-            filepath = f"./data/{ses.id}/{m["data"]["file"]}"
-            if not os.path.isfile(filepath):
-                with httpx.stream(
-                    "GET", m["data"]["url"].replace("https://", "http://"), timeout=60
-                ) as resp:
-                    with open(filepath, mode="bw") as file:
-                        for chunk in resp.iter_bytes():
-                            file.write(chunk)
-                bot.getLogger().info(f"下载图片: {filepath}")
+    for content in ses.contents:
+        for m in content:
+            if m["type"] == "image":
+                filepath = f"./data/{ses.id}/{m["data"]["file"]}"
+                if not os.path.isfile(filepath):
+                    with httpx.stream(
+                        "GET",
+                        m["data"]["url"].replace("https://", "http://"),
+                        timeout=60,
+                    ) as resp:
+                        with open(filepath, mode="bw") as file:
+                            for chunk in resp.iter_bytes():
+                                file.write(chunk)
+                    bot.getLogger().info(f"下载图片: {filepath}")
 
     path = await image.generate_img(
         ses.id, user=None if ses.anonymous else msg.sender, contents=ses.contents
@@ -198,6 +201,7 @@ async def content(msg: PrivateMessage):
         )
         return
     session = sessions[msg.sender]
+    items = []
     for m in msg.message:
         m["id"] = msg.message_id
         if m["type"] not in ["image", "text", "face"]:
@@ -209,8 +213,8 @@ async def content(msg: PrivateMessage):
                 f"用户 {msg.sender} 发送了不支持的消息: {m["type"]}",
             )
             continue
-        session.contents.append(m)
-    session.contents.append({"type": "br", "id": msg.message_id})
+        items.append(m)
+    session.contents.append(items)
 
 
 @bot.on_notice()

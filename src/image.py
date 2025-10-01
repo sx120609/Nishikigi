@@ -8,27 +8,28 @@ import playwright.async_api
 
 async def generate_img(id: int, user: User | None, contents: list) -> str:
     env = Environment(loader=FileSystemLoader("templates"))
-    values = []
-    for d in contents:
-        match (d["type"]):
-            case "image":
-                values.append(
-                    "file://"
-                    + os.path.abspath(f"./data/{id}/{d["data"]["file"]}")
-                )
-            case "text":
-                values.append(
-                    d["data"]["text"].replace("\r\n", "\n").replace("\n", "<br>")
-                )
-            case "face":
-                values.append(
-                    "face://" + os.path.abspath(f"./face/{d["data"]["id"]}.png")
-                )
-            case "br":
-                values.append("<br>")
-
+    _contents = []
+    for items in contents:
+        values = []
+        for d in items:
+            match (d["type"]):
+                case "image":
+                    values.append(
+                        "file://" + os.path.abspath(f"./data/{id}/{d["data"]["file"]}")
+                    )
+                case "text":
+                    values.append(
+                        d["data"]["text"].replace("\r\n", "\n").replace("\n", "<br>")
+                    )
+                case "face":
+                    values.append(
+                        "face://" + os.path.abspath(f"./face/{d["data"]["id"]}.png")
+                    )
+                case "br":
+                    values.append("<br/>")
+        _contents.append(values)
     output = env.get_template("normal.html" if user else "anonymous.html").render(
-        contents=values,
+        contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         username=None if user == None else user.nickname,
         user_id=None if user == None else user.user_id,
