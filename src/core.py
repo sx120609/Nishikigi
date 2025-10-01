@@ -222,7 +222,7 @@ async def recall(r: PrivateRecall):
     ses = sessions.get(User(nickname=None, user_id=r.user_id))
     if not ses:
         return
-    ses.contents = [c for c in ses.contents if c["id"] != r.message_id]
+    ses.contents = [c for c in ses.contents if c[0]["id"] != r.message_id]
 
 
 @bot.on_notice()
