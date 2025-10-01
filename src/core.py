@@ -195,10 +195,10 @@ async def content(msg: PrivateMessage):
         await msg.reply(
             f"✨欢迎使用 {config.NAME}\n本墙使用 Bot 实现自动化投稿😎\n请发送 #帮助 查看使用教程"
         )
-        await bot.send_group(
-            config.GROUP,
-            f"用户 {msg.sender} 触发了自动回复",
-        )
+        # await bot.send_group(
+        #     config.GROUP,
+        #     f"用户 {msg.sender} 触发了自动回复",
+        # )
         return
     session = sessions[msg.sender]
     items = []
@@ -225,9 +225,9 @@ async def recall(r: PrivateRecall):
     ses.contents = [c for c in ses.contents if c[0]["id"] != r.message_id]
 
 
-@bot.on_notice()
-async def friend(r: FriendAdd):
-    await bot.send_group(config.GROUP, f"{r.user_id} 添加了好友")
+# @bot.on_notice()
+# async def friend(r: FriendAdd):
+#     await bot.send_group(config.GROUP, f"{r.user_id} 添加了好友")
 
 
 @bot.on_cmd(
