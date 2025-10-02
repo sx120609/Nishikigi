@@ -4,6 +4,7 @@ import os
 from botx.models import User
 from jinja2 import Environment, FileSystemLoader
 import playwright.async_api
+import qrcode
 
 
 async def generate_img(id: int, user: User | None, contents: list) -> str:
@@ -28,11 +29,19 @@ async def generate_img(id: int, user: User | None, contents: list) -> str:
                 case "br":
                     values.append("<br/>")
         _contents.append(values)
+    if user != None:
+        url = f"https://3lu.cn/qq.php?qq={user.user_id}"
+        qr = qrcode.QRCode(border=0)
+        qr.add_data(url)
+        img = qr.make_image(back_color="#f0f0f0")
+        img.save(f"./data/{id}/qrcode.png")
+
     output = env.get_template("normal.html" if user else "anonymous.html").render(
         contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         username=None if user == None else user.nickname,
         user_id=None if user == None else user.user_id,
+        qrcode=os.path.abspath(f"./data/{id}/qrcode.png") if user else None,
     )
     with open(f"./data/{id}/page.html", mode="w") as f:
         f.write(output)

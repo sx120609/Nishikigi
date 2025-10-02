@@ -11,62 +11,78 @@
             background-color: #f0f0f0;
             display: flex;
             justify-content: center;
-            padding: 20px;
+            padding: 40px;
         }
         .card {
             padding: 30px;
             padding-bottom: 0%;
-            border-radius: 10px;
             min-width: 100%;
         }
         .user {
             display: flex;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 24px;
         }
         .avatar img {
             width: 100px;
             height: 100px;
-            margin-right: 24px;
+            margin-right: 28px;
             border-radius: 50%;
             object-fit: cover;
             box-shadow: 0 0 8px rgba(255,255,255,0.6),  /* 白色柔光 */
                 0 0 16px rgba(0,0,0,0.2);       /* 再加一点阴影层次 */
         }
+        .qrcode {
+            text-align: center;
+            font-size: 12px;
+            color: gray;
+        }
+        .qrcode img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+        }
         .message {
             background: #ffffff;   /* 白色气泡 */
             display: inline-block;
             max-width: 90%;
-            border-radius: 16px;
-            padding: 12px;
+            border-radius: 20px;
+            padding: 8px 14px;
             margin-bottom: 18px;
-            line-height: 1.6;
+            line-height: 1.4;
             font-size: 36px;
             word-wrap: break-word;
             box-shadow: 0 0 8px rgba(255,255,255,0.6),  /* 白色柔光 */
                         0 0 16px rgba(0,0,0,0.1);   
-            }
+        }
 
         .message img {
-            max-width: 100%;
-            border-radius: 16px;
+            max-width: 480px;
+            border-radius: 20px;
        }
     </style>
 </head>
 
 <body>
 <div class="card">
-    <div class="user">
-        <div class="avatar">
-            <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
+    <div style="display: flex; justify-content: space-between;">
+        <div class="user">
+            <div class="avatar">
+                <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
+            </div>
+            <div class="nickname">
+                <div style="font-size: 44px; font-weight: bold;">
+                {{ username }}
+                </div>
+                <div style="font-size: 28px; color: gray;">
+                {{ user_id }}
+                </div>
+            </div>
         </div>
-        <div class="nickname">
-            <div style="font-size: 44px; font-weight: bold;">
-            {{ username }}
-            </div>
-            <div style="font-size: 28px; color: gray;">
-            {{ user_id }}
-            </div>
+         <div class="qrcode">
+                <img src="{{ qrcode }}" alt="">
+                <br/>
+                扫二维码加好友
         </div>
     </div>
     <br/>
@@ -74,7 +90,9 @@
         <div class="message">
             {% for item in items %}
                 {% if item.startswith('file://') %}
+                    <br/>
                     <img src="{{ item }}" alt="图片跑路了">
+                    <br/>
                 {% elif item.startswith('face://') %}
                     <img src="file://{{ item[7:] }}" alt="表情", style="size: 20px; transform: translateY(12px);">
                 {% else %}
@@ -85,13 +103,14 @@
         <br/>
     {% endfor %}
 
-
-
     <br/>
     
+    <div style="display: flex; justify-content: right; margin-top: 42px">
+        Powered by Nishikigi
+    </div>
     <div style="display: flex; justify-content: space-between;">
-        <p> {{ date }}</p>
-        <p>Designed by Web Art Online</p>
+        <div> {{ date }}</div>
+        <div>Designed by Web Art Online</div>
     </div>
 </div>
 
