@@ -87,8 +87,12 @@ async def article(msg: PrivateMessage):
     ).id
     sessions[msg.sender] = Session(id=id, anonymous="匿名" in parts)
     os.makedirs(f"./data/{id}", exist_ok=True)
+
+    def status_words(value: bool) -> str:
+        return "是" if value else "否"
+
     await msg.reply(
-        f"开始投稿😉\n接下来你说的内容除了指令外都将被计入投稿当中\n发送 #结束 来结束投稿, 发送 #取消 取消本次投稿\n匿名: {"匿名" in parts}\n单发: {"单发" in parts}"
+        f"开始投稿😉\n接下来你说的内容除了指令外都将被计入投稿当中\n发送 #结束 来结束投稿, 发送 #取消 取消本次投稿\n匿名: {status_words("匿名" in parts)}\n单发: {status_words("单发" in parts)}"
     )
     if "单发" in parts:
         await msg.reply(

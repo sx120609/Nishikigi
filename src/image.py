@@ -34,7 +34,7 @@ async def generate_img(id: int, user: User | None, contents: list) -> str:
         qr = qrcode.QRCode(border=0)
         qr.add_data(url)
         img = qr.make_image(back_color="#f0f0f0")
-        img.save(f"./data/{id}/qrcode.png")
+        img.save(f"./data/{id}/qrcode.png")  # type: ignore
 
     output = env.get_template("normal.html" if user else "anonymous.html").render(
         contents=_contents,
