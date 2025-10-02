@@ -90,7 +90,14 @@ async def article(msg: PrivateMessage):
     await msg.reply(
         f"开始投稿😉\n接下来你说的内容除了指令外都将被计入投稿当中\n发送 #结束 来结束投稿, 发送 #取消 取消本次投稿\n匿名: {"匿名" in parts}\n单发: {"单发" in parts}"
     )
-
+    if "单发" in parts:
+        await msg.reply(
+            "请谨慎选择单发! \n如果所有人都选择单发的话, 大家的空间就会被挤满了😵‍💫\n如果你不需要单发的话, 可以发送 #取消 后再重新投稿"
+        )
+    if "匿名" in parts:
+        await msg.reply(
+            "匿名投稿不会显示你的昵称和头像哦~\n如果你不需要匿名的话, 可以发送 #取消 后再重新投稿\nPS: 之前有人匿名发失物招领, 令人摸不到头脑😵‍💫"
+        )
     await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
 
 
@@ -267,12 +274,14 @@ async def accept(msg: GroupMessage):
                 Article.select()
                 .where(Article.tid == "queue")
                 .order_by(Article.id.asc())
-                .limit(9)
+                .limit(config.QUEUE)
             )
-            if len(articles) < 4:
+            if len(articles) < config.QUEUE:
                 await msg.reply(f"当前队列中有{len(articles)}个稿件, 暂不推送")
             else:
-                await msg.reply(f"队列已积压{len(articles)}个稿件, 将推送前4个稿件...")
+                await msg.reply(
+                    f"队列已积压{len(articles)}个稿件, 将推送前{config.QUEUE}个稿件..."
+                )
                 tid = await publish(list(map(lambda a: a.id, articles)))
                 await msg.reply(
                     f"已推送{list(map(lambda a: a.id, articles))}\ntid: {tid}"

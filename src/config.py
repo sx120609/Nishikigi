@@ -4,11 +4,12 @@ import dotenv
 dotenv.load_dotenv()
 
 # 审核群
-GROUP = int(os.getenv("GROUP"))
+GROUP = int(os.getenv("GROUP", "0"))
 
-WS_URL = os.getenv("WS_URL")
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-NAME = os.getenv("NAME")
+WS_URL = os.getenv("WS_URL", "ws://localhost:3001")
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "")
+NAME = os.getenv("NAME", "TestBot")
+QUEUE = int(os.getenv("QUEUE", 4))
 
 # 用于获取图片等的 FastAPI 服务
 HOST = "localhost"
