@@ -8,7 +8,11 @@ import qrcode
 
 
 async def generate_img(id: int, user: User | None, contents: list) -> str:
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
     _contents = []
     for items in contents:
         values = []

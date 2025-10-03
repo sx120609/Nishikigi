@@ -206,10 +206,12 @@ async def content(msg: PrivateMessage):
     if msg.sender not in sessions:
         await msg.reply(
             textwrap.dedent(
-                f"""✨欢迎使用 {config.NAME}
+                f"""\
+                ✨欢迎使用 {config.NAME}
                 本墙使用 Bot 实现自动化投稿😎
                 请发送 #帮助 查看使用教程
-                注意: 所有指令以#开头, 指令内容和指令间有一个空格. 如: #反馈 你好,我需要帮助."""
+                注意: 所有指令以#开头, 格式为: #指令名(空格)参数1(空格)参数2 如: #投稿 单发 匿名.
+                """
             )
         )
         # await bot.send_group(
@@ -230,6 +232,12 @@ async def content(msg: PrivateMessage):
                 f"用户 {msg.sender} 发送了不支持的消息: {m["type"]}",
             )
             continue
+        # if m["type"] == "image" and len(items) > 0:
+        #     # 如果图片不是第一个的话, 在上一个末尾换行
+        #     items.append({"type": "br"})
+        # if len(items) > 0 and items[-1]["type"] == "image":
+        #     # 如果上一个是图片的话, 在上一个末尾换行
+        #     items.append({"type": "br"})
         items.append(m)
     session.contents.append(items)
 

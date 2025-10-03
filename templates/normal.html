@@ -11,11 +11,11 @@
             background-color: #f0f0f0;
             display: flex;
             justify-content: center;
-            padding: 40px;
+            padding: 54px 42px;
+            letter-spacing: 0.5px;
         }
         .card {
-            padding: 30px;
-            padding-bottom: 0%;
+            padding: 0px 30px;
             min-width: 100%;
         }
         .user {
@@ -30,7 +30,7 @@
             border-radius: 50%;
             object-fit: cover;
             box-shadow: 0 0 8px rgba(255,255,255,0.6),  /* 白色柔光 */
-                0 0 16px rgba(0,0,0,0.2);       /* 再加一点阴影层次 */
+                0 0 16px rgba(0,0,0,0.25);       /* 再加一点阴影层次 */
         }
         .qrcode {
             text-align: center;
@@ -47,19 +47,30 @@
             display: inline-block;
             max-width: 100%;
             border-radius: 20px;
-            padding: 8px 14px;
+            padding: 8px 16px;
             margin-bottom: 18px;
-            line-height: 1.4;
+            line-height: 1.5;
             font-size: 36px;
             word-wrap: break-word;
             box-shadow: 0 0 8px rgba(255,255,255,0.6),  /* 白色柔光 */
-                        0 0 16px rgba(0,0,0,0.1);   
+                        0 0 16px rgba(0,0,0,0.15);   
         }
-
         .message img {
             max-width: 480px;
             border-radius: 20px;
+            display: block;
+            margin: 8px 0px;
        }
+        .cqface {
+            vertical-align: middle;
+            width: 36px !important;
+            height: 36px !important;
+            margin: 0 !important;
+            display: inline !important;
+            padding: 0 !important;
+            transform: translateY(-0.1em);
+        }
+
     </style>
 </head>
 
@@ -90,11 +101,9 @@
         <div class="message">
             {% for item in items %}
                 {% if item.startswith('file://') %}
-                    <br/>
                     <img src="{{ item }}" alt="图片跑路了">
-                    <br/>
                 {% elif item.startswith('face://') %}
-                    <img src="file://{{ item[7:] }}" alt="表情", style="size: 20px; transform: translateY(12px);">
+                    <img src="file://{{ item[7:] }}" alt="表情", class="cqface">
                 {% else %}
                     {{ item }}
                 {% endif %}
