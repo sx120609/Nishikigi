@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 import os
 import shutil
+import textwrap
 import time
 from typing import Sequence
 
@@ -204,7 +205,12 @@ async def feedback(msg: PrivateMessage):
 async def content(msg: PrivateMessage):
     if msg.sender not in sessions:
         await msg.reply(
-            f"✨欢迎使用 {config.NAME}\n本墙使用 Bot 实现自动化投稿😎\n请发送 #帮助 查看使用教程"
+            textwrap.dedent(
+                f"""✨欢迎使用 {config.NAME}
+                本墙使用 Bot 实现自动化投稿😎
+                请发送 #帮助 查看使用教程
+                注意: 所有指令以#开头, 指令内容和指令间有一个空格. 如: #反馈 你好,我需要帮助."""
+            )
         )
         # await bot.send_group(
         #     config.GROUP,
@@ -374,7 +380,7 @@ async def view(msg: GroupMessage):
             status = "已驳回"
 
         await msg.reply(
-            f"#{id} 用户 {article.sender_name}({article.sender_id}) {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n"
+            f"#{id} 用户 {"" if article.sender_name == None else article.sender_name}({article.sender_id}) {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n"
             + f"[CQ:image,file={get_file_url(f"./data/{id}/image.png")}]"
             + f"状态: {status}",
         )
