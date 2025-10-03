@@ -475,3 +475,30 @@ async def clear():
                     config.GROUP, f"用户 {sess.user_id} 的投稿 {a} 因超时而被自动取消."
                 )
                 bot.getLogger().warning(f"取消用户 {sess.user_id} 的投稿 {a}")
+
+
+@bot.on_cmd(
+    "删除", help_msg="删除一条投稿, 可以删除多条, 如 #删除 1 2", targets=[config.GROUP]
+)
+async def delete(msg: GroupMessage):
+    async with lock:
+        parts = msg.raw_message.split(" ")
+        if len(parts) < 2:
+            await msg.reply("请带上要删除的投稿id")
+            return
+
+        ids = parts[1:]
+        for id in ids:
+            article = Article.get_or_none((Article.id == id) & (Article.tid == "queue"))
+            if not article:
+                await msg.reply(f"投稿 #{id} 不在队列中")
+                return
+            Article.delete_by_id(id)
+            if os.path.exists(f"./data/{id}"):
+                shutil.rmtree(f"./data/{id}")
+            await bot.send_private(
+                article.sender_id, f"你的投稿 #{id} 已被管理员删除😵‍💫"
+            )
+
+    await msg.reply(f"已删除 {ids}")
+    await update_name()
