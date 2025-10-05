@@ -2,7 +2,6 @@ import asyncio
 from datetime import datetime
 import os
 import shutil
-import textwrap
 import time
 from typing import Sequence
 
@@ -72,12 +71,22 @@ async def error(context: dict, data: dict):
 
 @bot.on_cmd(
     "投稿",
-    help_msg=f"我想来投个稿😉\n发送 #投稿 单发 可以要求单发, #投稿 匿名 就可以匿名了, #投稿 单发 匿名 就可以匿名单发\n如图所示:[CQ:image,url={get_file_url("help/article.jpg")}]",
+    help_msg = (
+    f"我想来投个稿 😉\n"
+    "—— 投稿方式 ——\n"
+    "📝 #投稿 ：普通投稿（显示昵称，由墙集中发布）\n"
+    "📮 #投稿 单发 ：让墙单独发一条空间动态\n"
+    "🕶️ #投稿 匿名 ：隐藏投稿者身份\n"
+    "💌 #投稿 单发 匿名 ：匿名并单独发一条动态\n"
+    "\n⚠️ 提示：请正确输入命令，不要多或少空格，比如：#投稿 匿名\n"
+    f"\n示例见图：[CQ:image,url={get_file_url('help/article.jpg')}]"
+)
+,
 )
 async def article(msg: PrivateMessage):
     parts = msg.raw_message.split(" ")
     if msg.sender in sessions:
-        await msg.reply("你还有投稿未结束呢🤔\n请先使用 #结束 来结束当前投稿")
+        await msg.reply("你还有投稿未结束🤔\n请先输入 #结束 来结束当前投稿")
         return
 
     id = Article.create(
@@ -93,20 +102,27 @@ async def article(msg: PrivateMessage):
         return "是" if value else "否"
 
     await msg.reply(
-        f"开始投稿😉\n接下来你说的内容除了指令外都将被计入投稿当中\n发送 #结束 来结束投稿, 发送 #取消 取消本次投稿\n匿名: {status_words("匿名" in parts)}\n单发: {status_words("单发" in parts)}"
+f"✨ 开始投稿 😉\n"
+f"你发送的内容（除命令外）会计入投稿。\n\n"
+f"—— 投稿操作指南 ——\n"
+f"1️⃣ 完成投稿：发送 #结束 来结束投稿并生成预览图\n"
+f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n"
+f"匿名: {status_words('匿名' in parts)}\n"
+f"单发: {status_words('单发' in parts)}\n"
+f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
+
     )
     if "单发" in parts:
         await msg.reply(
-            "请谨慎选择单发! \n如果所有人都选择单发的话, 大家的空间就会被挤满了😵‍💫\n如果你不需要单发的话, 可以发送 #取消 后再重新投稿"
+            "单发大概率被驳回! \n都单发的话, 大家的空间就会被挤满了😵‍💫\n节约你我时间，无需单发, 发送 #取消 后再重新投稿"
         )
     if "匿名" in parts:
         await msg.reply(
-            "匿名投稿不会显示你的昵称和头像哦~\n如果你不需要匿名的话, 可以发送 #取消 后再重新投稿\nPS: 之前有人匿名发失物招领, 令人摸不到头脑😵‍💫"
+            "匿名投稿不显示你的昵称和头像\n若无需匿名， 发送 #取消 后再重新投稿\nPS: 之前有人匿名发失物招领"
         )
     await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
 
-
-@bot.on_cmd("结束", help_msg="我已经说完啦😏")
+@bot.on_cmd("结束", help_msg="用于结束当前投稿")
 async def end(msg: PrivateMessage):
     if msg.sender not in sessions:
         await msg.reply("你还没有投稿哦~")
@@ -115,7 +131,7 @@ async def end(msg: PrivateMessage):
     bot.getLogger().debug(sessions[msg.sender].contents)
     if not sessions[msg.sender].contents:
         await msg.reply(
-            "你好像啥都没有说呢😵‍💫\n如果不想投稿了就发个 #取消 \n或者说点什么再发 #结束"
+            "你好像啥都没有说呢😵‍💫\n不想投稿了请输入 #取消 \n或者说点什么再输入 #结束"
         )
         return
     await msg.reply("正在生成预览图🚀\n请稍等片刻")
@@ -144,7 +160,7 @@ async def end(msg: PrivateMessage):
     )
 
 
-@bot.on_cmd("确认", help_msg="确认要发送当前投稿🤔")
+@bot.on_cmd("确认", help_msg="用于确认发送当前投稿")
 async def done(msg: PrivateMessage):
     if not msg.sender in sessions:
         await msg.reply("你都还没投稿确认啥🤨")
@@ -152,7 +168,7 @@ async def done(msg: PrivateMessage):
 
     session = sessions[msg.sender]
     if not os.path.isfile(f"./data/{session.id}/image.png"):
-        await msg.reply("请先发送 #结束 查看效果图🤔")
+        await msg.reply("请先发送 #结束 来查看效果图🤔")
         return
     sessions.pop(msg.sender)
     Article.update({"tid": "wait"}).where(Article.id == session.id).execute()
@@ -174,7 +190,7 @@ async def done(msg: PrivateMessage):
     await update_name()
 
 
-@bot.on_cmd("取消", help_msg="取消当前投稿🫢")
+@bot.on_cmd("取消", help_msg="用于取消当前投稿")
 async def cancel(msg: PrivateMessage):
     if not msg.sender in sessions:
         await msg.reply("你都还没投稿取消啥🤨")
@@ -191,7 +207,7 @@ async def cancel(msg: PrivateMessage):
 
 @bot.on_cmd(
     "反馈",
-    help_msg=f"向管理员反馈你的问题😘\n[CQ:image,file={get_file_url("help/feedback.png")}]",
+    help_msg=f"用于向管理员反馈你的问题😘\n使用方法：输入 #反馈 后直接加上你要反馈的内容\n本账号无人值守，不使用反馈发送的消息无法被看到\n使用案例：[CQ:image,file={get_file_url("help/feedback.png")}]",
 )
 async def feedback(msg: PrivateMessage):
     await bot.send_group(
@@ -205,14 +221,7 @@ async def feedback(msg: PrivateMessage):
 async def content(msg: PrivateMessage):
     if msg.sender not in sessions:
         await msg.reply(
-            textwrap.dedent(
-                f"""\
-                ✨欢迎使用 {config.NAME}
-                本墙使用 Bot 实现自动化投稿😎
-                请发送 #帮助 查看使用教程
-                注意: 所有指令以#开头, 格式为: #指令名(空格)参数1(空格)参数2 如: #投稿 单发 匿名.
-                """
-            )
+            f"✨欢迎使用 {config.NAME}\n本墙使用机器人自动处理投稿 😎\n📖 查看教程请输入：#帮助\n"
         )
         # await bot.send_group(
         #     config.GROUP,
@@ -232,12 +241,6 @@ async def content(msg: PrivateMessage):
                 f"用户 {msg.sender} 发送了不支持的消息: {m["type"]}",
             )
             continue
-        # if m["type"] == "image" and len(items) > 0:
-        #     # 如果图片不是第一个的话, 在上一个末尾换行
-        #     items.append({"type": "br"})
-        # if len(items) > 0 and items[-1]["type"] == "image":
-        #     # 如果上一个是图片的话, 在上一个末尾换行
-        #     items.append({"type": "br"})
         items.append(m)
     session.contents.append(items)
 
@@ -388,7 +391,7 @@ async def view(msg: GroupMessage):
             status = "已驳回"
 
         await msg.reply(
-            f"#{id} 用户 {"" if article.sender_name == None else article.sender_name}({article.sender_id}) {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n"
+            f"#{id} 用户 {article.sender_name}({article.sender_id}) {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n"
             + f"[CQ:image,file={get_file_url(f"./data/{id}/image.png")}]"
             + f"状态: {status}",
         )
