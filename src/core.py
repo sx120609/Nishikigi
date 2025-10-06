@@ -137,6 +137,9 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         "注意：如果能直接给出建议命令（如 #投稿 匿名）请放在 suggestion 字段；"
         "如果只能给自然语言建议，放在 reason 字段。请不要输出非 JSON 的内容。"
         "建议每次都补充一下，如果想要完整帮助，请输入 #帮助 来查看"
+        "投稿方法是先发送命令，再发送想要投稿的内容，然后按照提示操作"
+        "反馈就直接指令空格跟着反馈的内容就行"
+        "以上两条具体的方式，不需要每次都说，只要在涉及到有所了解即可"
     )
 
     key = hashlib.sha1((prompt).encode()).hexdigest()
