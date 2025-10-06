@@ -141,6 +141,7 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         "反馈就直接指令空格跟着反馈的内容就行"
         "以上两条具体的方式，不需要每次都说，只要在涉及到有所了解即可"
         "当用户发送 请求添加你为好友 或者类似的语句，或者没有什么意义的话，直接返回帮助"
+        "如果用户发送了不正确的#开头的命令，请告知用户如何修改为正确的指令，必须要精确匹配才行"
     )
 
     key = hashlib.sha1((prompt).encode()).hexdigest()
@@ -414,8 +415,13 @@ async def feedback(msg: PrivateMessage):
 
 @bot.on_msg()
 async def content(msg: PrivateMessage):
-    # 投稿会话中消息继续原逻辑
+    raw = msg.raw_message or ""
+
+    # 先处理投稿会话
     if msg.sender in sessions:
+        # 如果是已知命令，直接忽略，不加入投稿内容
+        if raw.startswith("#") and is_known_command(raw):
+            return  # 已知命令由 @bot.on_cmd 处理，不加入投稿
         session = sessions[msg.sender]
         items = []
         for m in msg.message:
@@ -430,23 +436,30 @@ async def content(msg: PrivateMessage):
                 )
                 continue
             items.append(m)
-        session.contents.append(items)
+        if items:
+            session.contents.append(items)
         return
 
-    raw = msg.raw_message or ""
-    # 如果消息是已知命令，但不是标准命令，就交给 AI
-    if raw.startswith("#") and not is_known_command(raw):
-        await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
-        ctx_summary = "用户当前不在投稿会话"
-        ai_result = await ai_suggest_intent(raw, ctx_summary)
-        await _reply_ai_suggestions(msg, ai_result, raw)
+    # ----------------------
+    # 只对未知命令调用 AI
+    # ----------------------
+    if raw.startswith("#"):
+        if not is_known_command(raw):
+            await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+            ctx_summary = "用户当前不在投稿会话"
+            ai_result = await ai_suggest_intent(raw, ctx_summary)
+            await _reply_ai_suggestions(msg, ai_result, raw)
+        else:
+            # 已知命令，直接忽略，让对应 @bot.on_cmd 处理
+            return
         return
 
-    # 其他普通消息也交给 AI
+    # 普通消息（非 # 开头）也可以交给 AI
     await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
     ctx_summary = "用户当前不在投稿会话"
     ai_result = await ai_suggest_intent(raw, ctx_summary)
     await _reply_ai_suggestions(msg, ai_result, raw)
+
 
     # 审计：把该交互记录到管理员群（可删除或替换为日志）
     #try:
