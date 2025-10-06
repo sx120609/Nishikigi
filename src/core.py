@@ -140,6 +140,7 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         "投稿方法是先发送命令，再发送想要投稿的内容，然后按照提示操作"
         "反馈就直接指令空格跟着反馈的内容就行"
         "以上两条具体的方式，不需要每次都说，只要在涉及到有所了解即可"
+        "当用户发送 请求添加你为好友 或者类似的语句，直接返回帮助"
     )
 
     key = hashlib.sha1((prompt).encode()).hexdigest()
