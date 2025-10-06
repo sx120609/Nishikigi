@@ -171,7 +171,7 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
     }
 
     body = {
-        "model": getattr(config, "OPENAI_MODEL", "gpt-5-nano"),
+        "model": getattr(config, "OPENAI_MODEL", "gpt-4o-mini"),
         "messages": [
             {"role": "system", "content": "你是把用户短文本转换成墙命令或友好建议的助手。输出 JSON。"},
             {"role": "user", "content": prompt},
