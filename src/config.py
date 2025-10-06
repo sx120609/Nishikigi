@@ -17,3 +17,6 @@ PORT = 8413
 
 # 自定义状态的表情ID, 详见 https://github.com/NapNeko/NapCatQQ/blob/main/src/core/external/face_config.json
 STATUS_ID = [400, 382, 383, 401, 400, 380, 381, 379, 376, 378, 377, 336]
+
+AGENT_ROUTER_BASE = os.getenv("AGENT_ROUTER_BASE")
+AGENT_ROUTER_KEY = os.getenv("AGENT_ROUTER_KEY")
