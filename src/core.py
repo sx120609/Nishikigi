@@ -11,6 +11,7 @@ import image
 import random
 import traceback
 import utils
+import config
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -20,6 +21,10 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse
 import httpx
 from uvicorn import Config, Server
+
+# 新增模块
+import json
+import hashlib
 
 app = FastAPI()
 bot = Bot(
@@ -53,35 +58,228 @@ def get_image(p: str, t: str, req: Request):
 
 @bot.on_error()
 async def error(context: dict, data: dict):
+    exc = context.get("exception")
+    tb = "".join(traceback.format_exception(exc)) if exc is not None else "no traceback"
     if "user_id" in data:
         await bot.send_private(
             data["user_id"],
-            f"出了一点小问题😵‍💫:\n\n{context["exception"]}",
+            f"出了一点小问题😵‍💫:\n\n{str(exc)}",
         )
         await bot.send_group(
             config.GROUP,
-            f"和用户 {data["user_id"]} 对话时出错:\n{"\n\n".join(traceback.format_exception(context["exception"]))}",
+            f"和用户 {data['user_id']} 对话时出错:\n{tb}",
         )
     else:
         await bot.send_group(
             config.GROUP,
-            f"出错了:\n{"\n\n".join(traceback.format_exception(context["exception"]))}",
+            f"出错了:\n{tb}",
         )
+
+
+# ----------------- AI 辅助相关（使用 agentrouter） -----------------
+AGENT_ROUTER_BASE = config.AGENT_ROUTER_BASE
+AGENT_ROUTER_KEY = config.AGENT_ROUTER_KEY
+# 取消本地限流（按你要求）
+def _can_call_ai(user_id: int) -> bool:
+    return True
+
+def _mark_ai_called(user_id: int):
+    pass
+
+# 缓存以减少重复 prompt 调用
+_ai_cache: dict[str, dict] = {}  # key -> {"resp":..., "_ts":...}
+
+def is_known_command(raw: str) -> bool:
+    """
+    检查消息是否为已知命令形式（用于让已知命令继续由 on_cmd 处理）
+    会把 '# 投稿' 之类规范化为 '#投稿' 后匹配。
+    """
+    if not raw:
+        return False
+    s = raw.strip()
+    if not s.startswith("#"):
+        return False
+    normalized = "#" + s[1:].replace(" ", "")
+    known_cmds = {
+        "#投稿","#结束","#确认","#取消","#帮助","#反馈","#通过","#驳回","#推送",
+        "#查看","#删除","#回复","#状态","#链接"
+    }
+    return normalized in known_cmds
+
+async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
+    """
+    调用 agentrouter 的 ChatCompletions 风格接口，返回结构体:
+    {"intent_candidates":[{"label":"...","suggestion":"#投稿 匿名","confidence":"高","reason":"..."}]}
+    出错或无法解析时返回 {"intent_candidates": []}
+    """
+    prompt = (
+        "你是“苏州实验中学校墙”的智能助手，任务是把用户短文本映射为墙的命令或友好回复。"
+        "最终请返回 JSON：{\"intent_candidates\":[{\"label\":\"\",\"suggestion\":\"\",\"confidence\":\"\",\"reason\":\"\"}]}\n\n"
+        f"墙的指令和说明：\n"
+        f"#帮助：查看使用说明。\n"
+        f"#投稿：开启投稿模式。\n"
+        f"投稿方式：\n"
+        f"  📝 #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
+        f"  📮 #投稿 单发 ：单独发一条空间动态\n"
+        f"  🕶️ #投稿 匿名 ：匿名投稿（不显示昵称/头像）\n"
+        f"  💌 #投稿 单发 匿名 ：匿名并单发\n"
+        f"#结束：结束当前投稿\n"
+        f"#确认：确认发送当前投稿\n"
+        f"#取消：取消投稿\n"
+        f"#反馈：向管理员反馈（示例：#反馈 机器人发不出去）\n\n"
+        f"上下文: {context_summary}\n"
+        f"原始消息: {raw}\n"
+        "注意：如果能直接给出建议命令（如 #投稿 匿名）请放在 suggestion 字段；"
+        "如果只能给自然语言建议，放在 reason 字段。请不要输出非 JSON 的内容。"
+        "建议每次都补充一下，如果想要完整帮助，请输入 #帮助 来查看"
+    )
+
+    key = hashlib.sha1((prompt).encode()).hexdigest()
+    cache_item = _ai_cache.get(key)
+    ttl = getattr(config, "AI_CACHE_TTL", 300)
+    if cache_item and time.time() - cache_item.get("_ts", 0) < ttl:
+        return cache_item["resp"]
+
+    headers = {
+        "Authorization": f"Bearer {AGENT_ROUTER_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    body = {
+        "model": getattr(config, "OPENAI_MODEL", "gpt-4o-mini"),
+        "messages": [
+            {"role": "system", "content": "你是把用户短文本转换成墙命令或友好建议的助手。输出 JSON。"},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 300,
+        "temperature": 0.0,
+    }
+
+    resp_obj = {"intent_candidates": []}
+    try:
+        url = AGENT_ROUTER_BASE.rstrip("/") + "/v1/chat/completions"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, headers=headers, json=body)
+            r.raise_for_status()
+            j = r.json()
+            text = ""
+            if "choices" in j and len(j["choices"]) > 0:
+                cand = j["choices"][0]
+                if isinstance(cand, dict) and "message" in cand and isinstance(cand["message"], dict):
+                    text = cand["message"].get("content", "") or ""
+                else:
+                    text = cand.get("text", "") or ""
+            if not text and "text" in j:
+                text = j.get("text", "")
+
+            # 尝试解析 JSON
+            try:
+                parsed = json.loads(text)
+                resp_obj = parsed
+            except Exception:
+                # 尝试提取文本中的 JSON 块
+                start = text.find("{")
+                end = text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    snippet = text[start:end+1]
+                    try:
+                        parsed = json.loads(snippet)
+                        resp_obj = parsed
+                    except Exception:
+                        resp_obj = {"intent_candidates": [{"label": "无法结构化解析", "suggestion": "", "confidence": "低", "reason": text[:400]}]}
+                else:
+                    resp_obj = {"intent_candidates": [{"label": "无法结构化解析", "suggestion": "", "confidence": "低", "reason": text[:400]}]}
+    except Exception as e:
+        bot.getLogger().warning(f"AI call failed: {e}")
+        resp_obj = {"intent_candidates": []}
+
+    _ai_cache[key] = {"resp": resp_obj, "_ts": time.time()}
+    return resp_obj
+
+# ---------- AI 输出友好化处理函数 ----------
+def _conf_label(conf: str) -> str:
+    """把置信度映射为可读标签 + emoji"""
+    if not conf:
+        return "？"
+    c = str(conf).lower()
+    if "高" in c or "high" in c:
+        return "✅ 高"
+    if "中" in c or "medium" in c or "mid" in c:
+        return "⚠️ 中"
+    return "❓ 低"
+
+def _shorten(s: str, n: int = 200) -> str:
+    if not s:
+        return ""
+    s = str(s).strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
+    """
+    把 ai_result 转成人能看懂且可操作的回复并发送。
+    期待 ai_result = {"intent_candidates":[{"label":"","suggestion":"","confidence":"","reason":""}, ...]}
+    """
+    candidates = ai_result.get("intent_candidates", []) if isinstance(ai_result, dict) else []
+    if not candidates:
+        await msg.reply(
+            "抱歉我没能猜出你具体想做什么😵‍💫\n"
+            "试试：\n"
+            "1) 简短说明你想做的事（例如：我要匿名投稿）\n"
+            "2) 发送 #帮助 查看使用说明\n"
+            "我可以把你的描述改写成合适的命令，或者直接给出步骤。"
+        )
+        return
+
+    have_sugg = [c for c in candidates if c.get("suggestion")]
+    no_sugg = [c for c in candidates if not c.get("suggestion")]
+
+    lines = []
+    lines.append("我把你的意思整理成了这些建议（直接复制建议命令并发送即可）：")
+
+    idx = 1
+    for c in have_sugg[:3]:
+        label = _shorten(c.get("label", "意图"), 40)
+        suggestion = c.get("suggestion", "").strip()
+        conf = _conf_label(c.get("confidence", ""))
+        reason = _shorten(c.get("reason", ""), 120)
+
+        lines.append(f"{idx}. {label}（{conf}）")
+        lines.append(f"   → 建议命令：{suggestion}")
+        if reason:
+            lines.append(f"   说明：{reason}")
+        lines.append(f"   操作：复制上面的建议命令并发送；或回复“我选{idx}”让我再把这条写成一段确认语。")
+        idx += 1
+
+    for c in no_sugg[:2]:
+        label = _shorten(c.get("label", "可能意图"), 60)
+        conf = _conf_label(c.get("confidence", ""))
+        reason = _shorten(c.get("reason", ""), 200)
+        lines.append(f"{idx}. {label}（{conf}）")
+        if reason:
+            lines.append(f"   说明：{reason}")
+        lines.append(f"   操作：如合适，请直接回复对应的命令或简短说明你的需求。")
+        idx += 1
+
+    lines.append("")
+    lines.append("不合适？直接回复一句你的目标（例如：我要匿名投稿），我会把它改写成命令。")
+    await msg.reply("\n".join(lines))
+
+
+# ----------------- End AI 辅助相关 -----------------
 
 
 @bot.on_cmd(
     "投稿",
-    help_msg = (
-    f"我想来投个稿 😉\n"
-    "—— 投稿方式 ——\n"
-    "📝 #投稿 ：普通投稿（显示昵称，由墙集中发布）\n"
-    "📮 #投稿 单发 ：让墙单独发一条空间动态\n"
-    "🕶️ #投稿 匿名 ：隐藏投稿者身份\n"
-    "💌 #投稿 单发 匿名 ：匿名并单独发一条动态\n"
-    "\n⚠️ 提示：请正确输入命令，不要多或少空格，比如：#投稿 匿名\n"
-    f"\n示例见图：[CQ:image,url={get_file_url('help/article.jpg')}]"
-)
-,
+    help_msg=(
+        f"我想来投个稿 😉\n"
+        "—— 投稿方式 ——\n"
+        "📝 #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
+        "📮 #投稿 单发 ：让墙单独发一条空间动态\n"
+        "🕶️ #投稿 匿名 ：隐藏投稿者身份\n"
+        "💌 #投稿 单发 匿名 ：匿名并单独发一条动态\n"
+        "\n⚠️ 提示：请正确输入命令，不要多或少空格，比如：#投稿 匿名\n"
+        f"\n示例见图：[CQ:image,url={get_file_url('help/article.jpg')}]"
+    ),
 )
 async def article(msg: PrivateMessage):
     parts = msg.raw_message.split(" ")
@@ -102,15 +300,14 @@ async def article(msg: PrivateMessage):
         return "是" if value else "否"
 
     await msg.reply(
-f"✨ 开始投稿 😉\n"
-f"你发送的内容（除命令外）会计入投稿。\n\n"
-f"—— 投稿操作指南 ——\n"
-f"1️⃣ 完成投稿：发送 #结束 来结束投稿并生成预览图\n"
-f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n"
-f"匿名: {status_words('匿名' in parts)}\n"
-f"单发: {status_words('单发' in parts)}\n"
-f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
-
+        f"✨ 开始投稿 😉\n"
+        f"你发送的内容（除命令外）会计入投稿。\n\n"
+        f"—— 投稿操作指南 ——\n"
+        f"1️⃣ 完成投稿：发送 #结束 来结束投稿并生成预览图\n"
+        f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n"
+        f"匿名模式启用状态: {status_words('匿名' in parts)}\n"
+        f"单发模式启用状态: {status_words('单发' in parts)}\n"
+        f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
     )
     if "单发" in parts:
         await msg.reply(
@@ -121,6 +318,7 @@ f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本�
             "匿名投稿不显示你的昵称和头像\n若无需匿名， 发送 #取消 后再重新投稿\nPS: 之前有人匿名发失物招领"
         )
     await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
+
 
 @bot.on_cmd("结束", help_msg="用于结束当前投稿")
 async def end(msg: PrivateMessage):
@@ -140,7 +338,7 @@ async def end(msg: PrivateMessage):
     for content in ses.contents:
         for m in content:
             if m["type"] == "image":
-                filepath = f"./data/{ses.id}/{m["data"]["file"]}"
+                filepath = f"./data/{ses.id}/{m['data']['file']}"
                 if not os.path.isfile(filepath):
                     with httpx.stream(
                         "GET",
@@ -156,7 +354,7 @@ async def end(msg: PrivateMessage):
         ses.id, user=None if ses.anonymous else msg.sender, contents=ses.contents
     )
     await msg.reply(
-        f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送 #确认, 要是算了的话就发个 #取消"
+        f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送 #确认, 不可以就发送 #取消"
     )
 
 
@@ -173,9 +371,12 @@ async def done(msg: PrivateMessage):
     sessions.pop(msg.sender)
     Article.update({"tid": "wait"}).where(Article.id == session.id).execute()
     article = Article.get_by_id(session.id)
+    anon_text = "匿名" if article.sender_name is None else ""
+    single_text = ", 要求单发" if article.single else ""
+    image_url = get_file_url(f"./data/{session.id}/image.png")
     await bot.send_group(
         config.GROUP,
-        f"#{session.id} 用户 {msg.sender} {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n[CQ:image,file={get_file_url(f"./data/{session.id}/image.png")}]",
+        f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]",
     )
     await msg.reply("已成功投稿, 请耐心等待管理员审核😘")
 
@@ -207,7 +408,7 @@ async def cancel(msg: PrivateMessage):
 
 @bot.on_cmd(
     "反馈",
-    help_msg=f"用于向管理员反馈你的问题😘\n使用方法：输入 #反馈 后直接加上你要反馈的内容\n本账号无人值守，不使用反馈发送的消息无法被看到\n使用案例：[CQ:image,file={get_file_url("help/feedback.png")}]",
+    help_msg=f"用于向管理员反馈你的问题😘\n使用方法：输入 #反馈 后直接加上你要反馈的内容\n本账号无人值守，不使用反馈发送的消息无法被看到\n使用案例：[CQ:image,file={get_file_url('help/feedback.png')}]",
 )
 async def feedback(msg: PrivateMessage):
     await bot.send_group(
@@ -217,32 +418,50 @@ async def feedback(msg: PrivateMessage):
     await msg.reply("感谢你的反馈😘")
 
 
+# ---------- 替换后的 on_msg：未知命令直接给 AI ----------
 @bot.on_msg()
 async def content(msg: PrivateMessage):
-    if msg.sender not in sessions:
-        await msg.reply(
-            f"✨欢迎使用 {config.NAME}\n本墙使用机器人自动处理投稿 😎\n📖 查看教程请输入：#帮助\n"
-        )
-        # await bot.send_group(
-        #     config.GROUP,
-        #     f"用户 {msg.sender} 触发了自动回复",
-        # )
+    # 如果用户在投稿会话中，使用原处理逻辑（不动）
+    if msg.sender in sessions:
+        session = sessions[msg.sender]
+        items = []
+        for m in msg.message:
+            m["id"] = msg.message_id
+            if m["type"] not in ["image", "text", "face"]:
+                await msg.reply(
+                    "当前版本仅支持发送文字、图片、表情哦～\n如果你觉得你一定要发送该类消息, 请使用 #反馈 来告诉我们哦\n注意：请不要使用QQ的引用/回复功能，该功能无法被机器人理解"
+                )
+                await bot.send_group(
+                    config.GROUP,
+                    f"用户 {msg.sender} 发送了不支持的消息: {m.get('type')}",
+                )
+                continue
+            items.append(m)
+        session.contents.append(items)
         return
-    session = sessions[msg.sender]
-    items = []
-    for m in msg.message:
-        m["id"] = msg.message_id
-        if m["type"] not in ["image", "text", "face"]:
-            await msg.reply(
-                "当前版本仅支持发送文字、图片、表情哦～\n如果你觉得你一定要发送该类消息, 请使用 #反馈 来告诉我们哦"
-            )
-            await bot.send_group(
-                config.GROUP,
-                f"用户 {msg.sender} 发送了不支持的消息: {m["type"]}",
-            )
-            continue
-        items.append(m)
-    session.contents.append(items)
+
+    # 用户不在会话：若是已知命令则不拦截，让 on_cmd 处理
+    raw = msg.raw_message or ""
+    if is_known_command(raw):
+        return
+
+    # 其他情况：直接把用户消息发给 AI（不再做初步判断）
+    uid = msg.sender.user_id
+
+    # 取消本地限流：直接调用 AI（注意外部服务自身限流）
+    await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+
+    ctx = "用户当前不在投稿会话"
+
+    ai_result = await ai_suggest_intent(raw, ctx)
+    # 处理 AI 输出并发送友好建议
+    await _reply_ai_suggestions(msg, ai_result, raw)
+
+    # 审计：把该交互记录到管理员群（可删除或替换为日志）
+    #try:
+    #    await bot.send_group(config.GROUP, f"AI 帮助记录 用户 {msg.sender} 原文: {raw}\nAI 建议: {json.dumps(ai_result.get('intent_candidates', []), ensure_ascii=False)}")
+    #except Exception:
+    #    bot.getLogger().warning("Failed to send AI log to group")
 
 
 @bot.on_notice()
@@ -330,13 +549,10 @@ async def refuse(msg: GroupMessage):
             await msg.reply(f"投稿 #{id} 不存在或已通过审核")
             return
 
-        # 保留证据
-        # Article.delete_by_id(id)
-        # shutil.rmtree(f"./data/{id}")
         Article.update({"tid": "refused"}).where(Article.id == id).execute()
         await bot.send_private(
             article.sender_id,
-            f"抱歉, 你的投稿 #{id} 已被管理员驳回😵‍💫 理由: {" ".join(reason)}",
+            f"抱歉, 你的投稿 #{id} 已被管理员驳回😵‍💫 理由: {' '.join(reason)}",
         )
         await msg.reply(f"已驳回投稿 #{id}")
 
@@ -390,9 +606,13 @@ async def view(msg: GroupMessage):
         elif article.tid == "refused":
             status = "已驳回"
 
+        anon_text = "匿名" if article.sender_name is None else ""
+        single_text = ", 要求单发" if article.single else ""
+        image_url = get_file_url(f"./data/{id}/image.png")
+
         await msg.reply(
-            f"#{id} 用户 {article.sender_name}({article.sender_id}) {"匿名" if article.sender_name == None else ""}投稿{", 要求单发" if article.single else ""}\n"
-            + f"[CQ:image,file={get_file_url(f"./data/{id}/image.png")}]"
+            f"#{id} 用户 {article.sender_name}({article.sender_id}) {anon_text}投稿{single_text}\n"
+            + f"[CQ:image,file={image_url}]\n"
             + f"状态: {status}",
         )
 
@@ -433,7 +653,7 @@ async def reply(msg: GroupMessage):
         return
 
     resp = await bot.send_private(
-        int(parts[1]), f"😘管理员回复:\n{" ".join(parts[2:])}"
+        int(parts[1]), f"😘管理员回复:\n{' '.join(parts[2:])}"
     )
     if resp is None:
         await msg.reply(f"无法回复用户 {parts[1]}\n请检查 QQ 号是否正确")
@@ -476,14 +696,20 @@ async def update_name():
 @scheduler.scheduled_job(IntervalTrigger(hours=1))
 async def clear():
     async with lock:
-        for sess in sessions:
-            a = Article.get_by_id(sessions[sess].id)
-            time = (datetime.now() - a.time).total_seconds()
+        # 注意：遍历 dict 时不可直接修改，先收集要移除的 key
+        to_remove = []
+        for sess in list(sessions.keys()):
+            try:
+                a = Article.get_by_id(sessions[sess].id)
+            except Exception:
+                continue
+            time_passed = (datetime.now() - a.time).total_seconds()
 
-            if time > 60 * 60 * 2:
-                sessions.pop(sess)
+            if time_passed > 60 * 60 * 2:
+                to_remove.append(sess)
                 Article.delete_by_id(a.id)
-                shutil.rmtree(f"./data/{a.id}")
+                if os.path.exists(f"./data/{a.id}"):
+                    shutil.rmtree(f"./data/{a.id}")
 
                 await bot.send_private(
                     sess.user_id, f"您的投稿 {a} 因为超时而被自动取消."
@@ -492,6 +718,9 @@ async def clear():
                     config.GROUP, f"用户 {sess.user_id} 的投稿 {a} 因超时而被自动取消."
                 )
                 bot.getLogger().warning(f"取消用户 {sess.user_id} 的投稿 {a}")
+
+        for sess in to_remove:
+            sessions.pop(sess, None)
 
 
 @bot.on_cmd(
