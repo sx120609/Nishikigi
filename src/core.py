@@ -93,12 +93,12 @@ def is_known_command(raw: str) -> bool:
     s = raw.strip()
     if not s.startswith("#"):
         return False
-    normalized = "#" + s[1:].split(" ")[0]  # 只取命令本身
+    normalized = "#" + s[1:].split(" ")[0]
     known_cmds = {
         "#投稿","#结束","#确认","#取消","#帮助","#反馈","#通过","#驳回","#推送",
         "#查看","#删除","#回复","#状态","#链接"
     }
-    return normalized in known_cmds and s.strip() == normalized  # 完全匹配才算已知
+    return normalized in known_cmds and s.strip() == normalized
 
 def _conf_label(conf: str) -> str:
     """把置信度映射为可读标签，更直观"""
@@ -106,10 +106,10 @@ def _conf_label(conf: str) -> str:
         return "❓不确定此答复是否有效"
     c = str(conf).lower()
     if "高" in c or "high" in c:
-        return "✅高（很确定此答复有效）"
+        return "✅很确定此答复有效"
     if "中" in c or "medium" in c or "mid" in c:
-        return "⚠️中（此答复可能有效）"
-    return "❓低（不确定此答复是否有效）"
+        return "⚠️此答复可能有效"
+    return "❓不确定此答复是否有效"
 
 async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
     """
