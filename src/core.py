@@ -22,7 +22,6 @@ from fastapi.responses import FileResponse
 import httpx
 from uvicorn import Config, Server
 
-# 新增模块
 import json
 import hashlib
 
@@ -75,11 +74,10 @@ async def error(context: dict, data: dict):
             f"出错了:\n{tb}",
         )
 
-
-# ----------------- AI 辅助相关（使用 agentrouter） -----------------
+# ----------------- AI 辅助相关 -----------------
 AGENT_ROUTER_BASE = config.AGENT_ROUTER_BASE
 AGENT_ROUTER_KEY = config.AGENT_ROUTER_KEY
-# 取消本地限流（按你要求）
+
 def _can_call_ai(user_id: int) -> bool:
     return True
 
@@ -90,21 +88,28 @@ def _mark_ai_called(user_id: int):
 _ai_cache: dict[str, dict] = {}  # key -> {"resp":..., "_ts":...}
 
 def is_known_command(raw: str) -> bool:
-    """
-    检查消息是否为已知命令形式（用于让已知命令继续由 on_cmd 处理）
-    会把 '# 投稿' 之类规范化为 '#投稿' 后匹配。
-    """
     if not raw:
         return False
     s = raw.strip()
     if not s.startswith("#"):
         return False
-    normalized = "#" + s[1:].replace(" ", "")
+    normalized = "#" + s[1:].split(" ")[0]  # 只取命令本身
     known_cmds = {
         "#投稿","#结束","#确认","#取消","#帮助","#反馈","#通过","#驳回","#推送",
         "#查看","#删除","#回复","#状态","#链接"
     }
-    return normalized in known_cmds
+    return normalized in known_cmds and s.strip() == normalized  # 完全匹配才算已知
+
+def _conf_label(conf: str) -> str:
+    """把置信度映射为可读标签，更直观"""
+    if not conf:
+        return "❓不确定此答复是否有效"
+    c = str(conf).lower()
+    if "高" in c or "high" in c:
+        return "✅高（很确定此答复有效）"
+    if "中" in c or "medium" in c or "mid" in c:
+        return "⚠️中（此答复可能有效）"
+    return "❓低（不确定此答复是否有效）"
 
 async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
     """
@@ -196,18 +201,6 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
     _ai_cache[key] = {"resp": resp_obj, "_ts": time.time()}
     return resp_obj
 
-# ---------- AI 输出友好化处理函数 ----------
-def _conf_label(conf: str) -> str:
-    """把置信度映射为可读标签 + emoji"""
-    if not conf:
-        return "？"
-    c = str(conf).lower()
-    if "高" in c or "high" in c:
-        return "✅ 高"
-    if "中" in c or "medium" in c or "mid" in c:
-        return "⚠️ 中"
-    return "❓ 低"
-
 def _shorten(s: str, n: int = 200) -> str:
     if not s:
         return ""
@@ -244,10 +237,10 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
         reason = _shorten(c.get("reason", ""), 120)
 
         lines.append(f"{idx}. {label}（{conf}）")
-        lines.append(f"   → 建议命令：{suggestion}")
+        lines.append(f"   → 建议发送命令：{suggestion}")
         if reason:
             lines.append(f"   说明：{reason}")
-        lines.append(f"   操作：复制上面的建议命令并发送；或回复“我选{idx}”让我再把这条写成一段确认语。")
+        lines.append(f"   操作：复制上面的建议命令内容并发送。")
         idx += 1
 
     for c in no_sugg[:2]:
@@ -264,9 +257,7 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
     lines.append("不合适？直接回复一句你的目标（例如：我要匿名投稿），我会把它改写成命令。")
     await msg.reply("\n".join(lines))
 
-
 # ----------------- End AI 辅助相关 -----------------
-
 
 @bot.on_cmd(
     "投稿",
@@ -417,11 +408,9 @@ async def feedback(msg: PrivateMessage):
     )
     await msg.reply("感谢你的反馈😘")
 
-
-# ---------- 替换后的 on_msg：未知命令直接给 AI ----------
 @bot.on_msg()
 async def content(msg: PrivateMessage):
-    # 如果用户在投稿会话中，使用原处理逻辑（不动）
+    # 投稿会话中消息继续原逻辑
     if msg.sender in sessions:
         session = sessions[msg.sender]
         items = []
@@ -429,7 +418,7 @@ async def content(msg: PrivateMessage):
             m["id"] = msg.message_id
             if m["type"] not in ["image", "text", "face"]:
                 await msg.reply(
-                    "当前版本仅支持发送文字、图片、表情哦～\n如果你觉得你一定要发送该类消息, 请使用 #反馈 来告诉我们哦\n注意：请不要使用QQ的引用/回复功能，该功能无法被机器人理解"
+                    "当前版本仅支持文字、图片、表情～\n如需发送其他类型，请用 #反馈 告诉我们\n请不要使用QQ的回复/引用功能，该功能无法被机器人理解"
                 )
                 await bot.send_group(
                     config.GROUP,
@@ -440,21 +429,19 @@ async def content(msg: PrivateMessage):
         session.contents.append(items)
         return
 
-    # 用户不在会话：若是已知命令则不拦截，让 on_cmd 处理
     raw = msg.raw_message or ""
-    if is_known_command(raw):
+    # 如果消息是已知命令，但不是标准命令，就交给 AI
+    if raw.startswith("#") and not is_known_command(raw):
+        await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+        ctx_summary = "用户当前不在投稿会话"
+        ai_result = await ai_suggest_intent(raw, ctx_summary)
+        await _reply_ai_suggestions(msg, ai_result, raw)
         return
 
-    # 其他情况：直接把用户消息发给 AI（不再做初步判断）
-    uid = msg.sender.user_id
-
-    # 取消本地限流：直接调用 AI（注意外部服务自身限流）
+    # 其他普通消息也交给 AI
     await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
-
-    ctx = "用户当前不在投稿会话"
-
-    ai_result = await ai_suggest_intent(raw, ctx)
-    # 处理 AI 输出并发送友好建议
+    ctx_summary = "用户当前不在投稿会话"
+    ai_result = await ai_suggest_intent(raw, ctx_summary)
     await _reply_ai_suggestions(msg, ai_result, raw)
 
     # 审计：把该交互记录到管理员群（可删除或替换为日志）
