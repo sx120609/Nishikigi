@@ -93,12 +93,28 @@ def is_known_command(raw: str) -> bool:
     s = raw.strip()
     if not s.startswith("#"):
         return False
-    normalized = "#" + s[1:].split(" ")[0]
+
     known_cmds = {
-        "#投稿","#结束","#确认","#取消","#帮助","#反馈","#通过","#驳回","#推送",
-        "#查看","#删除","#回复","#状态","#链接"
+        "#投稿",
+        "#投稿 匿名",
+        "#投稿 单发",
+        "#投稿 单发 匿名",
+        "#结束",
+        "#确认",
+        "#取消",
+        "#帮助",
+        "#反馈",
+        "#通过",
+        "#驳回",
+        "#推送",
+        "#查看",
+        "#删除",
+        "#回复",
+        "#状态",
+        "#链接",
     }
-    return normalized in known_cmds and s.strip() == normalized
+
+    return any(s.startswith(cmd) for cmd in known_cmds)
 
 def _conf_label(conf: str) -> str:
     """把置信度映射为可读标签，更直观"""
@@ -124,10 +140,10 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         f"#帮助：查看使用说明。\n"
         f"#投稿：开启投稿模式。\n"
         f"投稿方式：\n"
-        f"  📝 #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
-        f"  📮 #投稿 单发 ：单独发一条空间动态\n"
-        f"  🕶️ #投稿 匿名 ：匿名投稿（不显示昵称/头像）\n"
-        f"  💌 #投稿 单发 匿名 ：匿名并单发\n"
+        f"#投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
+        f"#投稿 单发 ：单独发一条空间动态\n"
+        f"#投稿 匿名 ：匿名投稿（不显示昵称/头像）\n"
+        f"#投稿 单发 匿名 ：匿名并单发\n"
         f"#结束：结束当前投稿\n"
         f"#确认：确认发送当前投稿\n"
         f"#取消：取消投稿\n"
