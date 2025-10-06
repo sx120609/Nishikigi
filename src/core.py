@@ -139,9 +139,8 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         "建议每次都补充一下，如果想要完整帮助，请输入 #帮助 来查看"
         "投稿方法是先发送命令，然后按照提示操作，不能直接投稿命令后面添加内容，例如 #投稿 哈哈哈 是错误的！"
         "反馈就直接指令空格跟着反馈的内容就行，例如 #反馈 哈哈哈 是正确的"
-        "以上两条具体的方式，不需要每次都说，只要在涉及到有所了解即可"
         "当用户发送 请求添加你为好友 或者类似的语句，或者没有什么意义的话，直接返回帮助"
-        "如果用户发送了不正确的#开头的命令，请告知用户如何修改为正确的指令，必须要精确匹配才行"
+        "如果用户发送了不正确的命令，请告知用户如何修改为正确的指令，必须要精确匹配才行"
     )
 
     key = hashlib.sha1((prompt).encode()).hexdigest()
@@ -473,7 +472,7 @@ async def content(msg: PrivateMessage):
     # ----------------------
     if raw.startswith("#"):
         if not is_known_command(raw):
-            await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+            #await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
             ctx_summary = "用户当前不在投稿会话"
             ai_result = await ai_suggest_intent(raw, ctx_summary)
             await _reply_ai_suggestions(msg, ai_result, raw)
@@ -483,7 +482,7 @@ async def content(msg: PrivateMessage):
         return
 
     # 普通消息（非 # 开头）也可以交给 AI
-    await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+    #await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
     ctx_summary = "用户当前不在投稿会话"
     ai_result = await ai_suggest_intent(raw, ctx_summary)
     await _reply_ai_suggestions(msg, ai_result, raw)
