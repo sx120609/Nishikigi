@@ -4,7 +4,7 @@ import os
 import shutil
 import time
 from typing import Sequence
-
+from datetime import datetime, timedelta
 import config
 from models import Article, Session
 import image
@@ -279,6 +279,34 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
 
 # ----------------- End AI 辅助相关 -----------------
 
+async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
+    """
+    检查用户当天投稿限制
+    返回 None 表示允许投稿
+    返回字符串表示错误提示
+    """
+    # 当天起止时间
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    # 查询当天该用户的所有投稿
+    today_articles = Article.select().where(
+        (Article.sender_id == user_id) &
+        (Article.time >= today_start) &
+        (Article.time < today_end)
+    )
+
+    total_count = today_articles.count()
+    if total_count >= 3:
+        return "❌ 你今天的投稿次数已达三次，请明天再投稿"
+
+    if anonymous:
+        anon_count = today_articles.where(Article.sender_name >> None).count()
+        if anon_count >= 1:
+            return "❌ 匿名投稿一天只能投稿一次，请明天再投稿"
+
+    return None
+
 @bot.on_cmd(
     "投稿",
     help_msg=(
@@ -316,11 +344,19 @@ async def article(msg: PrivateMessage):
         )
         return
 
+    # 检查投稿限制
+    anonymous = "匿名" in raw
+    limit_msg = await check_submission_limit(msg.sender.user_id, anonymous)
+    if limit_msg:
+        await msg.reply(limit_msg)
+        return
+
     # 如果用户已有未结束投稿
     if msg.sender in sessions:
         await msg.reply("你还有投稿未结束🤔\n请先输入 #结束 来结束当前投稿")
         return
 
+    # 以下为原来的创建投稿逻辑
     parts = raw.split(" ")
     id = Article.create(
         sender_id=msg.sender.user_id,
@@ -329,7 +365,7 @@ async def article(msg: PrivateMessage):
         single="单发" in parts,
     ).id
 
-    sessions[msg.sender] = Session(id=id, anonymous="匿名" in parts)
+    sessions[msg.sender] = Session(id=id, anonymous=anonymous)
     os.makedirs(f"./data/{id}", exist_ok=True)
 
     def status_words(value: bool) -> str:
@@ -341,7 +377,7 @@ async def article(msg: PrivateMessage):
         f"—— 投稿操作指南 ——\n"
         f"1️⃣ 完成投稿：发送 #结束 来结束投稿并生成预览图\n"
         f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n"
-        f"匿名模式启用状态: {status_words('匿名' in parts)}\n"
+        f"匿名模式启用状态: {status_words(anonymous)}\n"
         f"单发模式启用状态: {status_words('单发' in parts)}\n"
         f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
     )
