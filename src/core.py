@@ -251,7 +251,7 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
         msg_text = f"您可尝试发送:\n\n {suggestion}"
         if reason:
             msg_text += f"\n\n说明: {reason[:200]}"  # 保留更多信息
-        msg_text += "\n\n直接发送命令即可执行！"
+        msg_text += "\n\n直接发送命令即可执行，或简要描述你的问题！"
         await msg.reply(msg_text)
     else:
         # 没有 suggestion，则直接回复 reason
