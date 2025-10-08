@@ -106,7 +106,7 @@ def _mark_ai_called(user_id: int):
     pass
 
 # 缓存以减少重复 prompt 调用
-_ai_cache: dict[str, dict] = {}  # key -> {"resp":..., "_ts":...}
+# _ai_cache: dict[str, dict] = {}  # key -> {"resp":..., "_ts":...}
 
 def is_known_command(raw: str) -> bool:
     if not raw:
@@ -138,7 +138,6 @@ def is_known_command(raw: str) -> bool:
     return s in valid_cmds
 
 async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
-
     prompt = (
         "你是“苏州实验中学校墙”的智能助手，任务是把用户短文本映射为墙的命令或友好回复。"
         "最终请返回 JSON：{\"intent_candidates\":[{\"label\":\"\",\"suggestion\":\"\",\"confidence\":\"\",\"reason\":\"\"}]}\n\n"
@@ -166,12 +165,6 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         "如果用户发送了不正确的命令，请告知用户如何修改为正确的指令，必须要精确匹配才行"
         "一天只能匿名投稿一次，总投稿次数三次，如果想要额外投稿请反馈给管理员"
     )
-
-    key = hashlib.sha1((prompt).encode()).hexdigest()
-    cache_item = _ai_cache.get(key)
-    ttl = getattr(config, "AI_CACHE_TTL", 300)
-    if cache_item and time.time() - cache_item.get("_ts", 0) < ttl:
-        return cache_item["resp"]
 
     headers = {
         "Authorization": f"Bearer {AGENT_ROUTER_KEY}",
@@ -219,14 +212,31 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
                         parsed = json.loads(snippet)
                         resp_obj = parsed
                     except Exception:
-                        resp_obj = {"intent_candidates": [{"label": "无法结构化解析", "suggestion": "", "confidence": "低", "reason": text[:400]}]}
+                        resp_obj = {
+                            "intent_candidates": [
+                                {
+                                    "label": "无法结构化解析",
+                                    "suggestion": "",
+                                    "confidence": "低",
+                                    "reason": text[:400],
+                                }
+                            ]
+                        }
                 else:
-                    resp_obj = {"intent_candidates": [{"label": "无法结构化解析", "suggestion": "", "confidence": "低", "reason": text[:400]}]}
+                    resp_obj = {
+                        "intent_candidates": [
+                            {
+                                "label": "无法结构化解析",
+                                "suggestion": "",
+                                "confidence": "低",
+                                "reason": text[:400],
+                            }
+                        ]
+                    }
     except Exception as e:
         bot.getLogger().warning(f"AI call failed: {e}")
         resp_obj = {"intent_candidates": []}
 
-    _ai_cache[key] = {"resp": resp_obj, "_ts": time.time()}
     return resp_obj
 
 def _shorten(s: str, n: int = 200) -> str:
@@ -240,7 +250,7 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
 
     if not candidates:
         await msg.reply(
-            "抱歉，我没理解你想做什么😵‍💫\n请尝试简短说明你的目标，例如：“我要匿名投稿”\n或者发送 #帮助 查看操作指引"
+            "抱歉，我没理解你想做什么😵‍💫\n请尝试简短说明你的目标，例如：“我要匿名投稿”\n或者发送：\n\n#帮助\n\n来查看操作指引\n\n若一直返回此提示可能是AI功能繁忙，请稍等后重新发送"
         )
         return
 
@@ -263,7 +273,7 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
             await msg.reply("🤖 建议:\n\n" + "\n\n".join(reason_texts)+"\n\n或简单描述您的需求，我将为您提供建议！（例如 我要投稿）")
         else:
             await msg.reply(
-                "抱歉，我无法生成命令😵‍💫\n请尝试简短描述你的需求或发送 #帮助 查看操作指引"
+                "抱歉，我无法生成命令😵‍💫\n请尝试简短描述你的需求或发送：\n\n#帮助\n\n查看操作指引\n\n若一直返回此提示可能是AI功能繁忙，请稍等后重新发送"
             )
 # ----------------- End AI 辅助相关 -----------------
 
@@ -288,7 +298,7 @@ async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
 @bot.on_cmd(
     "投稿",
     help_msg=(
-        f"我想来投个稿 😉\n"
+        f"我想来投个稿 😉\n\n"
         "—— 投稿方式 ——\n"
         " #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
         " #投稿 单发 ：让墙单独发一条空间动态\n"
@@ -350,9 +360,9 @@ async def article(msg: PrivateMessage):
     await msg.reply(
         f"✨ 开始投稿 😉\n"
         f"你发送的内容（除命令外）会计入投稿。\n"
-        f"—— 投稿操作指南 ——\n\n"
-        f"1️⃣ 完成投稿：发送 #结束 来结束投稿并生成预览图\n"
-        f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n\n"
+        f"—— 投稿操作指南 ——\n"
+        f"1️⃣ 完成投稿：发送：\n\n#结束\n\n来结束投稿并生成预览图\n"
+        f"2️⃣ 取消投稿：发送：\n\n#取消\n\n来放弃本次投稿\n\n"
         f"匿名模式启用状态: {status_words(anonymous)}\n"
         f"单发模式启用状态: {status_words('单发' in parts)}\n"
         f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
@@ -360,11 +370,11 @@ async def article(msg: PrivateMessage):
 
     if "单发" in parts:
         await msg.reply(
-            "单发大概率被驳回! \n都单发的话, 大家的空间就会被挤满😵‍💫\n节约你我时间，无需单发, 发送 #取消 后再重新投稿"
+            "单发大概率被驳回! \n都单发的话, 大家的空间就会被挤满😵‍💫\n节约你我时间，无需单发, 发送：\n\n#取消\n\n后再重新投稿"
         )
     if "匿名" in parts:
         await msg.reply(
-            "匿名投稿不显示你的昵称和头像\n若无需匿名， 发送 #取消 后再重新投稿\nPS: 之前有人匿名发失物招领"
+            "匿名投稿不显示你的昵称和头像\n若无需匿名， 发送：\n\n#取消\n\n后再重新投稿\nPS: 之前有人匿名发失物招领"
         )
 
     await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
@@ -380,7 +390,7 @@ async def end(msg: PrivateMessage):
     bot.getLogger().debug(sessions[msg.sender].contents)
     if not sessions[msg.sender].contents:
         await msg.reply(
-            "你好像啥都没有说呢😵‍💫\n不想投稿了请输入 #取消 \n或者说点什么再输入 #结束"
+            "你好像啥都没有说呢😵‍💫\n不想投稿了请输入：\n\n#取消\n\n或者说点什么再输入：\n\n#结束"
         )
         return
     await msg.reply("正在生成预览图🚀\n请稍等片刻")
@@ -405,7 +415,7 @@ async def end(msg: PrivateMessage):
         ses.id, user=None if ses.anonymous else msg.sender, contents=ses.contents
     )
     await msg.reply(
-        f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送 #确认, 不可以就发送 #取消"
+        f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送：\n\n#确认\n\n不可以就发送：\n\n#取消"
     )
 
 
@@ -417,7 +427,7 @@ async def done(msg: PrivateMessage):
 
     session = sessions[msg.sender]
     if not os.path.isfile(f"./data/{session.id}/image.png"):
-        await msg.reply("请先发送 #结束 来查看效果图🤔")
+        await msg.reply("请先发送：\n\n#结束\n\n来查看效果图🤔")
         return
     sessions.pop(msg.sender)
     Article.update({"tid": "wait"}).where(Article.id == session.id).execute()
