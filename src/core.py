@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, time
+from datetime import datetime, time, date
 import os
 import shutil
 import time
@@ -13,6 +13,7 @@ import traceback
 import utils
 import config
 
+from peewee import Model, IntegerField, DateField, SqliteDatabase
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -26,6 +27,22 @@ from uvicorn import Config, Server
 import json
 import hashlib
 
+# 创建投稿数据表
+count_db = SqliteDatabase("./data/submission_count.db")
+
+class SubmissionCount(Model):
+    user_id = IntegerField()
+    date = DateField()
+    normal_count = IntegerField(default=0)
+    anonymous_count = IntegerField(default=0)
+
+    class Meta:
+        database = count_db
+        table_name = "submission_count"
+
+count_db.connect()
+count_db.create_tables([SubmissionCount], safe=True)
+
 app = FastAPI()
 bot = Bot(
     ws_uri=config.WS_URL, token=config.ACCESS_TOKEN, log_level="DEBUG", msg_cd=0.5
@@ -37,6 +54,7 @@ server = Server(Config(app=app, host="localhost", port=config.PORT, workers=1))
 sessions: dict[User, Session] = {}
 submission_counts: dict[int, int] = {}
 last_reset_date: str = datetime.now().strftime("%Y-%m-%d")
+anon_reset_flags: dict[int, datetime] = {}
 
 token = hex(random.randint(0, 2 << 128))[2:]
 start_time = time.time()
@@ -250,32 +268,22 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
 # ----------------- End AI 辅助相关 -----------------
 
 async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
-    global last_reset_date, submission_counts
+    today = datetime.now().date()
 
-    # 自动每日清零
-    today = datetime.now().strftime("%Y-%m-%d")
-    if today != last_reset_date:
-        submission_counts.clear()
-        last_reset_date = today
-        print(f"[INFO] 已自动清空投稿次数（日期变化为 {today}）")
+    # 查询当天计数
+    record = SubmissionCount.get_or_none(
+        (SubmissionCount.user_id == user_id) & (SubmissionCount.date == today)
+    )
+    normal_count = record.normal_count if record else 0
+    anon_count = record.anonymous_count if record else 0
 
-    if anonymous:
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = today_start + timedelta(days=1)
-        anon_count = Article.select().where(
-            (Article.sender_id == user_id) &
-            (Article.sender_name >> None) &
-            (Article.time >= today_start) &
-            (Article.time < today_end)
-        ).count()
-        if anon_count >= 1:
-            return "❌ 匿名投稿一天只能投稿一次，请明天再投稿"
-
-    count = submission_counts.get(user_id, 0)
-    if count >= 3:
+    if anonymous and anon_count >= 1:
+        return "❌ 匿名投稿一天只能投稿一次，请明天再投稿"
+    if normal_count >= 3:
         return "❌ 你今天的投稿次数已达三次，请明天再投稿"
 
     return None
+
 
 @bot.on_cmd(
     "投稿",
@@ -421,7 +429,15 @@ async def done(msg: PrivateMessage):
         config.GROUP,
         f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]",
     )
-    submission_counts[msg.sender.user_id] = submission_counts.get(msg.sender.user_id, 0) + 1
+
+    today = date.today()
+    record, created = SubmissionCount.get_or_create(user_id=msg.sender.user_id, date=today)
+    if session.anonymous:
+        record.anonymous_count += 1
+    else:
+        record.normal_count += 1
+    record.save()
+
     await msg.reply("已成功投稿, 请耐心等待管理员审核😘")
 
     await bot.call_api(
@@ -786,25 +802,16 @@ async def reset_limits(msg: GroupMessage):
 
     user_ids = [int(uid) for uid in parts[1:] if uid.isdigit()]
     if not user_ids:
-        await msg.reply("❌ 没有有效的用户ID，请检查输入")
+        await msg.reply("❌ 没有有效的用户ID")
         return
 
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
-
-    # 清空普通投稿次数
-    for uid in user_ids:
-        submission_counts[uid] = 0
-
-    # 删除匿名投稿计数
-    Article.delete().where(
-        (Article.sender_id.in_(user_ids)) &
-        (Article.sender_name >> None) &
-        (Article.time >= today_start) &
-        (Article.time < today_end)
+    today = datetime.now().date()
+    # 只清空计数表，不删除实际投稿
+    SubmissionCount.delete().where(
+        (SubmissionCount.user_id.in_(user_ids)) & (SubmissionCount.date == today)
     ).execute()
 
-    await msg.reply(f"✅ 已清空用户 {user_ids} 的投稿次数限制！")
+    await msg.reply(f"✅ 已重置用户 {user_ids} 的投稿次数限制！")
 
 
 @bot.on_cmd(
