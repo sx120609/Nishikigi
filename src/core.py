@@ -644,6 +644,7 @@ async def push(msg: GroupMessage):
         await msg.reply(f"开始推送 {ids}")
         tid = await publish(ids)
         await msg.reply(f"已推送 {ids}\ntid: {tid}")
+        await update_name()
 
 
 @bot.on_cmd(
@@ -685,7 +686,7 @@ async def view(msg: GroupMessage):
 async def status(msg: GroupMessage):
     waiting = Article.select().where(Article.tid == "wait")
     queue = Article.select().where(Article.tid == "queue")
-
+    await update_name()
     await msg.reply(
         f"Nishikigi 已运行 {int(time.time() - start_time)}s\n待审核: {utils.to_list(waiting)}\n待推送: {utils.to_list(queue)}"
     )
