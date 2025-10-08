@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, time
 import os
 import shutil
 import time
@@ -15,6 +15,7 @@ import config
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+
 from botx import Bot
 from botx.models import PrivateMessage, GroupMessage, User, PrivateRecall, FriendAdd
 from fastapi import FastAPI, Request, HTTPException
@@ -34,6 +35,8 @@ bot = Bot(
 server = Server(Config(app=app, host="localhost", port=config.PORT, workers=1))
 
 sessions: dict[User, Session] = {}
+submission_counts: dict[int, int] = {}
+last_reset_date: str = datetime.now().strftime("%Y-%m-%d")
 
 token = hex(random.randint(0, 2 << 128))[2:]
 start_time = time.time()
@@ -280,30 +283,32 @@ async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
 # ----------------- End AI 辅助相关 -----------------
 
 async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
-    """
-    检查用户当天投稿限制
-    返回 None 表示允许投稿
-    返回字符串表示错误提示
-    """
-    # 当天起止时间
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
+    global last_reset_date, submission_counts
 
-    # 查询当天该用户的所有投稿
-    today_articles = Article.select().where(
-        (Article.sender_id == user_id) &
-        (Article.time >= today_start) &
-        (Article.time < today_end)
-    )
+    # 自动每日清零
+    today = datetime.now().strftime("%Y-%m-%d")
+    if today != last_reset_date:
+        submission_counts.clear()
+        last_reset_date = today
+        print(f"[INFO] 已自动清空投稿次数（日期变化为 {today}）")
 
-    total_count = today_articles.count()
-    if total_count >= 3:
-        return "❌ 你今天的投稿次数已达三次，请明天再投稿"
-
+    # 匿名投稿限制
     if anonymous:
-        anon_count = today_articles.where(Article.sender_name >> None).count()
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        anon_count = Article.select().where(
+            (Article.sender_id == user_id) &
+            (Article.sender_name >> None) &
+            (Article.time >= today_start) &
+            (Article.time < today_end)
+        ).count()
         if anon_count >= 1:
             return "❌ 匿名投稿一天只能投稿一次，请明天再投稿"
+
+    # 普通投稿次数限制
+    count = submission_counts.get(user_id, 0)
+    if count >= 3:
+        return "❌ 你今天的投稿次数已达三次，请明天再投稿"
 
     return None
 
@@ -453,6 +458,7 @@ async def done(msg: PrivateMessage):
         config.GROUP,
         f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]",
     )
+    submission_counts[msg.sender.user_id] = submission_counts.get(msg.sender.user_id, 0) + 1
     await msg.reply("已成功投稿, 请耐心等待管理员审核😘")
 
     await bot.call_api(
@@ -805,6 +811,42 @@ async def clear():
         for sess in to_remove:
             sessions.pop(sess, None)
 
+@bot.on_cmd(
+    "重置",
+    help_msg=(
+        "清空指定用户的投稿次数限制（包括当天匿名投稿）\n"
+        "示例: #重置 12345 67890  → 清空指定用户"
+    ),
+    targets=[config.GROUP],
+)
+async def reset_limits(msg: GroupMessage):
+    parts = msg.raw_message.split(" ")
+    if len(parts) <= 1:
+        await msg.reply("❌ 请带上用户ID，例如：#重置 10001")
+        return
+
+    # 提取有效用户ID
+    user_ids = [int(uid) for uid in parts[1:] if uid.isdigit()]
+    if not user_ids:
+        await msg.reply("❌ 没有有效的用户ID，请检查输入")
+        return
+
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+
+    # 清空普通投稿次数
+    for uid in user_ids:
+        submission_counts[uid] = 0
+
+    # 删除当天匿名投稿计数，避免限制阻止再次投稿
+    Article.delete().where(
+        (Article.sender_id.in_(user_ids)) &
+        (Article.sender_name >> None) &
+        (Article.time >= today_start) &
+        (Article.time < today_end)
+    ).execute()
+
+    await msg.reply(f"✅ 已清空用户 {user_ids} 的投稿次数限制（含匿名投稿）！")
 
 @bot.on_cmd(
     "删除", help_msg="删除一条投稿, 可以删除多条, 如 #删除 1 2", targets=[config.GROUP]
