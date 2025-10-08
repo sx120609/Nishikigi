@@ -114,6 +114,7 @@ def is_known_command(raw: str) -> bool:
         "#回复",
         "#状态",
         "#链接",
+        "#重置",
     }
 
     return s in valid_cmds
@@ -160,6 +161,7 @@ async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
         "当用户发送没有什么意义的话，直接返回帮助"
         "当用户发送 请求添加你为好友 或者类似的语句，请给用户介绍自己，并返回帮助"
         "如果用户发送了不正确的命令，请告知用户如何修改为正确的指令，必须要精确匹配才行"
+        "一天只能匿名投稿一次，总投稿次数三次，如果想要额外投稿请反馈给管理员"
     )
 
     key = hashlib.sha1((prompt).encode()).hexdigest()
@@ -231,55 +233,35 @@ def _shorten(s: str, n: int = 200) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
 
 async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
-    """
-    把 ai_result 转成人能看懂且可操作的回复并发送。
-    期待 ai_result = {"intent_candidates":[{"label":"","suggestion":"","confidence":"","reason":""}, ...]}
-    """
     candidates = ai_result.get("intent_candidates", []) if isinstance(ai_result, dict) else []
+
     if not candidates:
         await msg.reply(
-            "抱歉我没能猜出你具体想做什么😵‍💫\n"
-            "试试：\n"
-            "1) 简短说明你想做的事（例如：我要匿名投稿）\n"
-            "2) 发送 #帮助 查看使用说明\n"
-            "我可以把你的描述改写成合适的命令，或者直接给出步骤。"
+            "抱歉，我没理解你想做什么😵‍💫\n请尝试简短说明你的目标，例如：“我要匿名投稿”\n或者发送 #帮助 查看操作指引"
         )
         return
 
-    have_sugg = [c for c in candidates if c.get("suggestion")]
-    no_sugg = [c for c in candidates if not c.get("suggestion")]
+    # 优先取有 suggestion 的候选
+    best = next((c for c in candidates if c.get("suggestion")), None)
 
-    lines = []
-    lines.append("我把你的意思整理成了这些建议（直接复制建议命令并发送即可）：")
+    if best:
+        suggestion = best["suggestion"].strip()
+        reason = best.get("reason", "").strip()
 
-    idx = 1
-    for c in have_sugg[:3]:
-        label = _shorten(c.get("label", "意图"), 40)
-        suggestion = c.get("suggestion", "").strip()
-        conf = _conf_label(c.get("confidence", ""))
-        reason = _shorten(c.get("reason", ""), 120)
-
-        lines.append(f"{idx}. {label}（{conf}）")
-        lines.append(f"   → 建议发送命令：{suggestion}")
+        msg_text = f"您可尝试发送:\n\n {suggestion}"
         if reason:
-            lines.append(f"   说明：{reason}")
-        lines.append(f"   操作：复制上面的建议命令内容并发送。")
-        idx += 1
-
-    for c in no_sugg[:2]:
-        label = _shorten(c.get("label", "可能意图"), 60)
-        conf = _conf_label(c.get("confidence", ""))
-        reason = _shorten(c.get("reason", ""), 200)
-        lines.append(f"{idx}. {label}（{conf}）")
-        if reason:
-            lines.append(f"   说明：{reason}")
-        lines.append(f"   操作：如合适，请直接回复对应的命令或简短说明你的需求。")
-        idx += 1
-
-    lines.append("")
-    lines.append("不合适？直接回复一句你的目标（例如：我要匿名投稿），我会把它改写成命令。")
-    await msg.reply("\n".join(lines))
-
+            msg_text += f"\n\n说明: {reason[:200]}"  # 保留更多信息
+        msg_text += "\n\n直接发送命令即可执行！"
+        await msg.reply(msg_text)
+    else:
+        # 没有 suggestion，则直接回复 reason
+        reason_texts = [c.get("reason") for c in candidates if c.get("reason")]
+        if reason_texts:
+            await msg.reply("🤖 建议:\n\n" + "\n\n".join(reason_texts)+"\n\n或简单描述您的需求，我将为您提供建议！")
+        else:
+            await msg.reply(
+                "抱歉，我无法生成命令😵‍💫\n请尝试简短描述你的需求或发送 #帮助 查看操作指引"
+            )
 # ----------------- End AI 辅助相关 -----------------
 
 async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
