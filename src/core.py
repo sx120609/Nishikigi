@@ -119,23 +119,8 @@ def is_known_command(raw: str) -> bool:
 
     return s in valid_cmds
 
-def _conf_label(conf: str) -> str:
-    """把置信度映射为可读标签，更直观"""
-    if not conf:
-        return "❓不确定此答复是否有效"
-    c = str(conf).lower()
-    if "高" in c or "high" in c:
-        return "✅很确定此答复有效"
-    if "中" in c or "medium" in c or "mid" in c:
-        return "⚠️此答复可能有效"
-    return "❓不确定此答复是否有效"
-
 async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
-    """
-    调用 agentrouter 的 ChatCompletions 风格接口，返回结构体:
-    {"intent_candidates":[{"label":"...","suggestion":"#投稿 匿名","confidence":"高","reason":"..."}]}
-    出错或无法解析时返回 {"intent_candidates": []}
-    """
+
     prompt = (
         "你是“苏州实验中学校墙”的智能助手，任务是把用户短文本映射为墙的命令或友好回复。"
         "最终请返回 JSON：{\"intent_candidates\":[{\"label\":\"\",\"suggestion\":\"\",\"confidence\":\"\",\"reason\":\"\"}]}\n\n"
@@ -274,7 +259,6 @@ async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
         last_reset_date = today
         print(f"[INFO] 已自动清空投稿次数（日期变化为 {today}）")
 
-    # 匿名投稿限制
     if anonymous:
         today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = today_start + timedelta(days=1)
@@ -287,7 +271,6 @@ async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
         if anon_count >= 1:
             return "❌ 匿名投稿一天只能投稿一次，请明天再投稿"
 
-    # 普通投稿次数限制
     count = submission_counts.get(user_id, 0)
     if count >= 3:
         return "❌ 你今天的投稿次数已达三次，请明天再投稿"
@@ -299,10 +282,10 @@ async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
     help_msg=(
         f"我想来投个稿 😉\n"
         "—— 投稿方式 ——\n"
-        "📝 #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
-        "📮 #投稿 单发 ：让墙单独发一条空间动态\n"
-        "🕶️ #投稿 匿名 ：隐藏投稿者身份\n"
-        "💌 #投稿 单发 匿名 ：匿名并单独发一条动态\n"
+        " #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
+        " #投稿 单发 ：让墙单独发一条空间动态\n"
+        " #投稿 匿名 ：隐藏投稿者身份\n"
+        " #投稿 单发 匿名 ：匿名并单独发一条动态\n"
         "\n⚠️ 提示：请正确输入命令，不要多或少空格，比如：#投稿 匿名\n"
         f"\n示例见图：[CQ:image,url={get_file_url('help/article.jpg')}]"
     ),
@@ -323,10 +306,10 @@ async def article(msg: PrivateMessage):
         await msg.reply(
             "❌ 投稿命令格式错误！\n"
             "正确格式示例：\n"
-            "📝 #投稿\n"
-            "📮 #投稿 单发\n"
-            "🕶️ #投稿 匿名\n"
-            "💌 #投稿 单发 匿名\n"
+            " #投稿\n"
+            " #投稿 单发\n"
+            " #投稿 匿名\n"
+            " #投稿 单发 匿名\n"
             "请勿在命令后直接添加内容"
         )
         return
@@ -338,12 +321,10 @@ async def article(msg: PrivateMessage):
         await msg.reply(limit_msg)
         return
 
-    # 如果用户已有未结束投稿
     if msg.sender in sessions:
         await msg.reply("你还有投稿未结束🤔\n请先输入 #结束 来结束当前投稿")
         return
 
-    # 以下为原来的创建投稿逻辑
     parts = raw.split(" ")
     id = Article.create(
         sender_id=msg.sender.user_id,
@@ -360,10 +341,10 @@ async def article(msg: PrivateMessage):
 
     await msg.reply(
         f"✨ 开始投稿 😉\n"
-        f"你发送的内容（除命令外）会计入投稿。\n\n"
-        f"—— 投稿操作指南 ——\n"
+        f"你发送的内容（除命令外）会计入投稿。\n"
+        f"—— 投稿操作指南 ——\n\n"
         f"1️⃣ 完成投稿：发送 #结束 来结束投稿并生成预览图\n"
-        f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n"
+        f"2️⃣ 取消投稿：发送 #取消 来放弃本次投稿\n\n"
         f"匿名模式启用状态: {status_words(anonymous)}\n"
         f"单发模式启用状态: {status_words('单发' in parts)}\n"
         f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
@@ -507,22 +488,18 @@ async def content(msg: PrivateMessage):
             session.contents.append(items)
         return
 
-    # ----------------------
-    # 只对未知命令调用 AI
-    # ----------------------
+
     if raw.startswith("#"):
         if not is_known_command(raw):
-            #await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+            # await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
             ctx_summary = "用户当前不在投稿会话"
             ai_result = await ai_suggest_intent(raw, ctx_summary)
             await _reply_ai_suggestions(msg, ai_result, raw)
         else:
-            # 已知命令，直接忽略，让对应 @bot.on_cmd 处理
             return
         return
 
-    # 普通消息（非 # 开头）也可以交给 AI
-    #await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
+    # await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
     ctx_summary = "用户当前不在投稿会话"
     ai_result = await ai_suggest_intent(raw, ctx_summary)
     await _reply_ai_suggestions(msg, ai_result, raw)
@@ -749,7 +726,6 @@ async def publish(ids: Sequence[int | str]) -> str:
         )
     return tid
 
-
 async def update_name():
     bot.getLogger().debug("更新群备注")
     waiting = Article.select().where(Article.tid == "wait")
@@ -793,6 +769,7 @@ async def clear():
         for sess in to_remove:
             sessions.pop(sess, None)
 
+
 @bot.on_cmd(
     "重置",
     help_msg=(
@@ -807,7 +784,6 @@ async def reset_limits(msg: GroupMessage):
         await msg.reply("❌ 请带上用户ID，例如：#重置 10001")
         return
 
-    # 提取有效用户ID
     user_ids = [int(uid) for uid in parts[1:] if uid.isdigit()]
     if not user_ids:
         await msg.reply("❌ 没有有效的用户ID，请检查输入")
@@ -820,7 +796,7 @@ async def reset_limits(msg: GroupMessage):
     for uid in user_ids:
         submission_counts[uid] = 0
 
-    # 删除当天匿名投稿计数，避免限制阻止再次投稿
+    # 删除匿名投稿计数
     Article.delete().where(
         (Article.sender_id.in_(user_ids)) &
         (Article.sender_name >> None) &
@@ -828,7 +804,8 @@ async def reset_limits(msg: GroupMessage):
         (Article.time < today_end)
     ).execute()
 
-    await msg.reply(f"✅ 已清空用户 {user_ids} 的投稿次数限制（含匿名投稿）！")
+    await msg.reply(f"✅ 已清空用户 {user_ids} 的投稿次数限制！")
+
 
 @bot.on_cmd(
     "删除", help_msg="删除一条投稿, 可以删除多条, 如 #删除 1 2", targets=[config.GROUP]
