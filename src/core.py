@@ -811,7 +811,17 @@ async def reset_limits(msg: GroupMessage):
         (SubmissionCount.user_id.in_(user_ids)) & (SubmissionCount.date == today)
     ).execute()
 
-    await msg.reply(f"✅ 已重置用户 {user_ids} 的投稿次数限制！")
+    # 给被重置的用户发送私聊通知
+    for uid in user_ids:
+        try:
+            await bot.send_private(
+                uid,
+                f"✅ 你的当天投稿次数限制已被管理员重置，你今天可以继续投稿了！"
+            )
+        except Exception as e:
+            bot.getLogger().warning(f"给用户 {uid} 发送重置通知失败: {e}")
+
+    await msg.reply(f"✅ 已重置用户 {user_ids} 的投稿次数限制，并已通知！")
 
 
 @bot.on_cmd(
