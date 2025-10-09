@@ -512,7 +512,7 @@ async def content(msg: PrivateMessage):
     # 先处理投稿会话
     if msg.sender in sessions:
         # 如果是已知命令，直接忽略，不加入投稿内容
-        if raw.startswith("#") and is_known_command(raw):
+        if (raw.startswith("#") or raw.startswith("＃")) and is_known_command(raw):
             return  # 已知命令由 @bot.on_cmd 处理，不加入投稿
         session = sessions[msg.sender]
         items = []
@@ -532,17 +532,15 @@ async def content(msg: PrivateMessage):
             session.contents.append(items)
         return
 
-
-    if raw.startswith("#"):
+    if raw.startswith("#") or raw.startswith("＃"):
         if not is_known_command(raw):
-            # await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
             ctx_summary = "用户当前不在投稿会话"
             ai_result = await ai_suggest_intent(raw, ctx_summary)
             await _reply_ai_suggestions(msg, ai_result, raw)
         else:
             return
         return
-
+    
     # await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
     ctx_summary = "用户当前不在投稿会话"
     ai_result = await ai_suggest_intent(raw, ctx_summary)
