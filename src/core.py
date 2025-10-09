@@ -334,7 +334,11 @@ async def article(msg: PrivateMessage):
         "#投稿",
         "#投稿 单发",
         "#投稿 匿名",
-        "#投稿 单发 匿名"
+        "#投稿 单发 匿名",
+        "＃投稿",
+        "＃投稿 单发",
+        "＃投稿 匿名",
+        "＃投稿 单发 匿名"
     ]
     
     # 如果命令不在允许列表中，直接提示并返回
@@ -540,7 +544,7 @@ async def content(msg: PrivateMessage):
         else:
             return
         return
-    
+
     # await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
     ctx_summary = "用户当前不在投稿会话"
     ai_result = await ai_suggest_intent(raw, ctx_summary)
