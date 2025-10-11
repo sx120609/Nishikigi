@@ -3,7 +3,6 @@ import httpx
 from botx.models import PrivateMessage
 
 import config
-from main import bot
 
 
 def is_known_command(raw: str) -> bool:
@@ -139,6 +138,8 @@ async def ai_suggest_intent(raw: str) -> dict:
                         ]
                     }
     except Exception as e:
+        from core import bot
+
         bot.getLogger().warning(f"AI call failed: {e}")
         resp_obj = {"intent_candidates": []}
 

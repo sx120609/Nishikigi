@@ -4,7 +4,11 @@ import os
 import shutil
 import time
 from typing import Sequence
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from uvicorn import Config, Server
 import config
 from models import Article, Session
 import image
@@ -12,7 +16,6 @@ import random
 import traceback
 import utils
 
-from main import bot, get_file_url
 import config
 import agent
 
@@ -22,13 +25,33 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from botx import Bot
 from botx.models import PrivateMessage, GroupMessage, User, PrivateRecall, FriendAdd
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import FileResponse
 import httpx
-from uvicorn import Config, Server
 
 import json
 import hashlib
+
+bot = Bot(
+    ws_uri=config.WS_URL, token=config.ACCESS_TOKEN, log_level="DEBUG", msg_cd=0.5
+)
+
+token = hex(random.randint(0, 2 << 128))[2:]
+
+app = FastAPI()
+
+# workers 必须为 1. 因为没有多进程数据同步.
+server = Server(Config(app=app, host="localhost", port=config.PORT, workers=1))
+
+
+def get_file_url(path: str):
+    return f"http://{config.HOST}:{config.PORT}/image?p={path}&t={token}"
+
+
+@app.get("/image")
+def get_image(p: str, t: str):
+    if t != token:
+        raise HTTPException(status_code=401, detail="Nothing.")
+    return FileResponse(path=p)
+
 
 # 创建投稿数据表
 count_db = SqliteDatabase("./data/submission_count.db")
