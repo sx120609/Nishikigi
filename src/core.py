@@ -11,7 +11,10 @@ import image
 import random
 import traceback
 import utils
+
+from main import bot, get_file_url
 import config
+import agent
 
 from peewee import Model, IntegerField, DateField, SqliteDatabase
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -30,6 +33,7 @@ import hashlib
 # 创建投稿数据表
 count_db = SqliteDatabase("./data/submission_count.db")
 
+
 class SubmissionCount(Model):
     user_id = IntegerField()
     date = DateField()
@@ -40,40 +44,22 @@ class SubmissionCount(Model):
         database = count_db
         table_name = "submission_count"
 
+
 count_db.connect()
 count_db.create_tables([SubmissionCount], safe=True)
 
-app = FastAPI()
-bot = Bot(
-    ws_uri=config.WS_URL, token=config.ACCESS_TOKEN, log_level="DEBUG", msg_cd=0.5
-)
-
-# workers 必须为 1. 因为没有多进程数据同步.
-server = Server(Config(app=app, host="localhost", port=config.PORT, workers=1))
 
 sessions: dict[User, Session] = {}
 submission_counts: dict[int, int] = {}
 last_reset_date: str = datetime.now().strftime("%Y-%m-%d")
 anon_reset_flags: dict[int, datetime] = {}
 
-token = hex(random.randint(0, 2 << 128))[2:]
 start_time = time.time()
 
 # 管理的一些操作要上锁
 lock = asyncio.Lock()
 
 scheduler = AsyncIOScheduler()
-
-
-def get_file_url(path: str):
-    return f"http://{config.HOST}:{config.PORT}/image?p={path}&t={token}"
-
-
-@app.get("/image")
-def get_image(p: str, t: str, req: Request):
-    if t != token:
-        raise HTTPException(status_code=401, detail="Nothing.")
-    return FileResponse(path=p)
 
 
 @bot.on_error()
@@ -95,205 +81,6 @@ async def error(context: dict, data: dict):
             f"出错了:\n{tb}",
         )
 
-# ----------------- AI 辅助相关 -----------------
-AGENT_ROUTER_BASE = config.AGENT_ROUTER_BASE
-AGENT_ROUTER_KEY = config.AGENT_ROUTER_KEY
-
-def _can_call_ai(user_id: int) -> bool:
-    return True
-
-def _mark_ai_called(user_id: int):
-    pass
-
-# 缓存以减少重复 prompt 调用
-# _ai_cache: dict[str, dict] = {}  # key -> {"resp":..., "_ts":...}
-
-def is_known_command(raw: str) -> bool:
-    if not raw:
-        return False
-    s = raw.strip()
-
-    # 仅识别以下完全匹配的命令
-    valid_cmds = {
-        "#投稿",
-        "#投稿 匿名",
-        "#投稿 单发",
-        "#投稿 单发 匿名",
-        "#结束",
-        "#确认",
-        "#取消",
-        "#帮助",
-        "#反馈",
-        "#通过",
-        "#驳回",
-        "#推送",
-        "#查看",
-        "#删除",
-        "#回复",
-        "#状态",
-        "#链接",
-        "#重置",
-        "＃投稿",
-        "＃投稿 匿名",
-        "＃投稿 单发",
-        "＃投稿 单发 匿名",
-        "＃结束",
-        "＃确认",
-        "＃取消",
-        "＃帮助",
-        "＃反馈",
-        "＃通过",
-        "＃驳回",
-        "＃推送",
-        "＃查看",
-        "＃删除",
-        "＃回复",
-        "＃状态",
-        "＃链接",
-        "＃重置",
-    }
-
-    return s in valid_cmds
-
-async def ai_suggest_intent(raw: str, context_summary: str = "") -> dict:
-    prompt = (
-        "你是“苏州实验中学校墙”的智能助手，任务是把用户短文本映射为墙的命令或友好回复。"
-        "最终请返回 JSON：{\"intent_candidates\":[{\"label\":\"\",\"suggestion\":\"\",\"confidence\":\"\",\"reason\":\"\"}]}\n\n"
-        f"墙的指令和说明：\n"
-        f"#帮助：查看使用说明。\n"
-        f"#投稿：开启投稿模式。\n"
-        f"投稿方式：\n"
-        f"#投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
-        f"#投稿 单发 ：单独发一条空间动态\n"
-        f"#投稿 匿名 ：匿名投稿（不显示昵称/头像）\n"
-        f"#投稿 单发 匿名 ：匿名并单发\n"
-        f"#结束：结束当前投稿\n"
-        f"#确认：确认发送当前投稿\n"
-        f"#取消：取消投稿\n"
-        f"#反馈：向管理员反馈（示例：#反馈 机器人发不出去）\n\n"
-        f"上下文: {context_summary}\n"
-        f"原始消息: {raw}\n"
-        "注意：如果能直接给出建议命令（如 #投稿 匿名）请放在 suggestion 字段；"
-        "如果只能给自然语言建议，放在 reason 字段。请不要输出非 JSON 的内容。"
-        "建议每次都补充一下，如果想要完整帮助，请输入 #帮助 来查看"
-        "投稿方法是先发送命令，然后按照提示操作，不能直接投稿命令后面添加内容，例如 #投稿 哈哈哈 是错误的！"
-        "反馈就直接指令空格跟着反馈的内容就行，例如 #反馈 哈哈哈 是正确的"
-        "当用户发送没有什么意义的话，直接返回帮助"
-        "当用户发送 请求添加你为好友 或者类似的语句，请给用户介绍自己，并返回帮助"
-        "如果用户发送了不正确的命令，请告知用户如何修改为正确的指令，必须要精确匹配才行"
-        "一天只能匿名投稿一次，总投稿次数三次，如果想要额外投稿请反馈给管理员"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {AGENT_ROUTER_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    body = {
-        "model": getattr(config, "OPENAI_MODEL", "gpt-4o-mini"),
-        "messages": [
-            {"role": "system", "content": "你是把用户短文本转换成墙命令或友好建议的助手。输出 JSON。"},
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": 300,
-        "temperature": 0.0,
-    }
-
-    resp_obj = {"intent_candidates": []}
-    try:
-        url = AGENT_ROUTER_BASE.rstrip("/") + "/v1/chat/completions"
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.post(url, headers=headers, json=body)
-            r.raise_for_status()
-            j = r.json()
-            text = ""
-            if "choices" in j and len(j["choices"]) > 0:
-                cand = j["choices"][0]
-                if isinstance(cand, dict) and "message" in cand and isinstance(cand["message"], dict):
-                    text = cand["message"].get("content", "") or ""
-                else:
-                    text = cand.get("text", "") or ""
-            if not text and "text" in j:
-                text = j.get("text", "")
-
-            # 尝试解析 JSON
-            try:
-                parsed = json.loads(text)
-                resp_obj = parsed
-            except Exception:
-                # 尝试提取文本中的 JSON 块
-                start = text.find("{")
-                end = text.rfind("}")
-                if start != -1 and end != -1 and end > start:
-                    snippet = text[start:end+1]
-                    try:
-                        parsed = json.loads(snippet)
-                        resp_obj = parsed
-                    except Exception:
-                        resp_obj = {
-                            "intent_candidates": [
-                                {
-                                    "label": "无法结构化解析",
-                                    "suggestion": "",
-                                    "confidence": "低",
-                                    "reason": text[:400],
-                                }
-                            ]
-                        }
-                else:
-                    resp_obj = {
-                        "intent_candidates": [
-                            {
-                                "label": "无法结构化解析",
-                                "suggestion": "",
-                                "confidence": "低",
-                                "reason": text[:400],
-                            }
-                        ]
-                    }
-    except Exception as e:
-        bot.getLogger().warning(f"AI call failed: {e}")
-        resp_obj = {"intent_candidates": []}
-
-    return resp_obj
-
-def _shorten(s: str, n: int = 200) -> str:
-    if not s:
-        return ""
-    s = str(s).strip()
-    return s if len(s) <= n else s[: n - 1] + "…"
-
-async def _reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
-    candidates = ai_result.get("intent_candidates", []) if isinstance(ai_result, dict) else []
-
-    if not candidates:
-        await msg.reply(
-            "抱歉，我没理解你想做什么😵‍💫\n请尝试简短说明你的目标，例如：“我要匿名投稿”\n或者发送：\n\n#帮助\n\n来查看操作指引\n\n若一直返回此提示可能是AI功能繁忙，请稍等后重新发送"
-        )
-        return
-
-    # 优先取有 suggestion 的候选
-    best = next((c for c in candidates if c.get("suggestion")), None)
-
-    if best:
-        suggestion = best["suggestion"].strip()
-        reason = best.get("reason", "").strip()
-
-        msg_text = f"您可尝试发送:\n\n {suggestion}"
-        if reason:
-            msg_text += f"\n\n说明: {reason[:200]}"  # 保留更多信息
-        msg_text += "\n\n直接发送命令即可执行，或简要描述你的问题！（例如 我要投稿）"
-        await msg.reply(msg_text)
-    else:
-        # 没有 suggestion，则直接回复 reason
-        reason_texts = [c.get("reason") for c in candidates if c.get("reason")]
-        if reason_texts:
-            await msg.reply("🤖 建议:\n\n" + "\n\n".join(reason_texts)+"\n\n或简单描述您的需求，我将为您提供建议！（例如 我要投稿）")
-        else:
-            await msg.reply(
-                "抱歉，我无法生成命令😵‍💫\n请尝试简短描述你的需求或发送：\n\n#帮助\n\n查看操作指引\n\n若一直返回此提示可能是AI功能繁忙，请稍等后重新发送"
-            )
-# ----------------- End AI 辅助相关 -----------------
 
 async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
     today = datetime.now().date()
@@ -306,9 +93,9 @@ async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
     anon_count = record.anonymous_count if record else 0
 
     if anonymous and anon_count >= 1:
-        return "❌ 匿名投稿一天只能投稿一次，请明天再投稿"
+        return "❌ 匿名投稿一天只能投稿一次, 请明天再投稿"
     if normal_count >= 3:
-        return "❌ 你今天的投稿次数已达三次，请明天再投稿"
+        return "❌ 你今天的投稿次数已达三次, 请明天再投稿"
 
     return None
 
@@ -318,17 +105,17 @@ async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
     help_msg=(
         f"我想来投个稿 😉\n\n"
         "—— 投稿方式 ——\n"
-        " #投稿 ：普通投稿（显示昵称，由墙统一发布）\n"
-        " #投稿 单发 ：让墙单独发一条空间动态\n"
-        " #投稿 匿名 ：隐藏投稿者身份\n"
-        " #投稿 单发 匿名 ：匿名并单独发一条动态\n"
-        "\n⚠️ 提示：请正确输入命令，不要多或少空格，比如：#投稿 匿名\n"
-        f"\n示例见图：[CQ:image,url={get_file_url('help/article.jpg')}]"
+        " #投稿 :  普通投稿(显示昵称, 由墙统一发布)\n"
+        " #投稿 单发 :  让墙单独发一条空间动态\n"
+        " #投稿 匿名 :  隐藏投稿者身份\n"
+        " #投稿 单发 匿名 :  匿名并单独发一条动态\n"
+        "\n⚠️ 提示:  请正确输入命令, 不要多或少空格, 比如:  #投稿 匿名\n"
+        f"\n示例见图:  [CQ:image,url={get_file_url('help/article.jpg')}]"
     ),
 )
 async def article(msg: PrivateMessage):
     raw = msg.raw_message.strip()
-    
+
     # 定义严格允许的投稿命令
     valid_options = [
         "#投稿",
@@ -338,14 +125,14 @@ async def article(msg: PrivateMessage):
         "＃投稿",
         "＃投稿 单发",
         "＃投稿 匿名",
-        "＃投稿 单发 匿名"
+        "＃投稿 单发 匿名",
     ]
-    
-    # 如果命令不在允许列表中，直接提示并返回
+
+    # 如果命令不在允许列表中, 直接提示并返回
     if raw not in valid_options:
         await msg.reply(
-            "❌ 投稿命令格式错误！\n"
-            "正确格式示例：\n"
+            "❌ 投稿命令格式错误! \n"
+            "正确格式示例:  \n"
             " #投稿\n"
             " #投稿 单发\n"
             " #投稿 匿名\n"
@@ -381,26 +168,25 @@ async def article(msg: PrivateMessage):
 
     await msg.reply(
         f"✨ 开始投稿 😉\n"
-        f"你发送的内容（除命令外）会计入投稿。\n"
+        f"你发送的内容(除命令外)会计入投稿。\n"
         f"—— 投稿操作指南 ——\n"
-        f"1️⃣ 完成投稿：发送：\n\n#结束\n\n来结束投稿并生成预览图\n"
-        f"2️⃣ 取消投稿：发送：\n\n#取消\n\n来放弃本次投稿\n\n"
+        f"1️⃣ 完成投稿:  发送:  \n\n#结束\n\n来结束投稿并生成预览图\n"
+        f"2️⃣ 取消投稿:  发送:  \n\n#取消\n\n来放弃本次投稿\n\n"
         f"匿名模式启用状态: {status_words(anonymous)}\n"
         f"单发模式启用状态: {status_words('单发' in parts)}\n"
-        f"⚠️ 匿名和单发在设定后无法更改，如需更改请先取消本次投稿"
+        f"⚠️ 匿名和单发在设定后无法更改, 如需更改请先取消本次投稿"
     )
 
     if "单发" in parts:
         await msg.reply(
-            "单发大概率被驳回! \n都单发的话, 大家的空间就会被挤满😵‍💫\n节约你我时间，无需单发, 发送：\n\n#取消\n\n后再重新投稿"
+            "单发大概率被驳回! \n都单发的话, 大家的空间就会被挤满😵‍💫\n节约你我时间, 无需单发, 发送:  \n\n#取消\n\n后再重新投稿"
         )
     if "匿名" in parts:
         await msg.reply(
-            "匿名投稿不显示你的昵称和头像\n若无需匿名， 发送：\n\n#取消\n\n后再重新投稿\nPS: 之前有人匿名发失物招领"
+            "匿名投稿不显示你的昵称和头像\n若无需匿名,  发送:  \n\n#取消\n\n后再重新投稿\nPS: 之前有人匿名发失物招领"
         )
 
     await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
-
 
 
 @bot.on_cmd("结束", help_msg="用于结束当前投稿")
@@ -412,7 +198,7 @@ async def end(msg: PrivateMessage):
     bot.getLogger().debug(sessions[msg.sender].contents)
     if not sessions[msg.sender].contents:
         await msg.reply(
-            "你好像啥都没有说呢😵‍💫\n不想投稿了请输入：\n\n#取消\n\n或者说点什么再输入：\n\n#结束"
+            "你好像啥都没有说呢😵‍💫\n不想投稿了请输入:  \n\n#取消\n\n或者说点什么再输入:  \n\n#结束"
         )
         return
     await msg.reply("正在生成预览图🚀\n请稍等片刻")
@@ -437,7 +223,7 @@ async def end(msg: PrivateMessage):
         ses.id, user=None if ses.anonymous else msg.sender, contents=ses.contents
     )
     await msg.reply(
-        f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送：\n\n#确认\n\n不可以就发送：\n\n#取消"
+        f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送:  \n\n#确认\n\n不可以就发送:  \n\n#取消"
     )
 
 
@@ -449,7 +235,7 @@ async def done(msg: PrivateMessage):
 
     session = sessions[msg.sender]
     if not os.path.isfile(f"./data/{session.id}/image.png"):
-        await msg.reply("请先发送：\n\n#结束\n\n来查看效果图🤔")
+        await msg.reply("请先发送:  \n\n#结束\n\n来查看效果图🤔")
         return
     sessions.pop(msg.sender)
     Article.update({"tid": "wait"}).where(Article.id == session.id).execute()
@@ -463,7 +249,9 @@ async def done(msg: PrivateMessage):
     )
 
     today = date.today()
-    record, created = SubmissionCount.get_or_create(user_id=msg.sender.user_id, date=today)
+    record, created = SubmissionCount.get_or_create(
+        user_id=msg.sender.user_id, date=today
+    )
     if session.anonymous:
         record.anonymous_count += 1
     else:
@@ -500,7 +288,7 @@ async def cancel(msg: PrivateMessage):
 
 @bot.on_cmd(
     "反馈",
-    help_msg=f"用于向管理员反馈你的问题😘\n使用方法：输入 #反馈 后直接加上你要反馈的内容\n本账号无人值守，不使用反馈发送的消息无法被看到\n使用案例：[CQ:image,file={get_file_url('help/feedback.png')}]",
+    help_msg=f"用于向管理员反馈你的问题😘\n使用方法:  输入 #反馈 后直接加上你要反馈的内容\n本账号无人值守, 不使用反馈发送的消息无法被看到\n使用案例:  [CQ:image,file={get_file_url('help/feedback.png')}]",
 )
 async def feedback(msg: PrivateMessage):
     await bot.send_group(
@@ -509,22 +297,27 @@ async def feedback(msg: PrivateMessage):
     )
     await msg.reply("感谢你的反馈😘")
 
+
 @bot.on_msg()
 async def content(msg: PrivateMessage):
     raw = msg.raw_message or ""
 
     # 先处理投稿会话
     if msg.sender in sessions:
-        # 如果是已知命令，直接忽略，不加入投稿内容
-        if (raw.startswith("#") or raw.startswith("＃")) and is_known_command(raw):
-            return  # 已知命令由 @bot.on_cmd 处理，不加入投稿
+        # 如果是已知命令, 直接忽略, 不加入投稿内容
+        if agent.is_known_command(raw):
+            return  # 已知命令由 @bot.on_cmd 处理, 不加入投稿
+        elif raw.startswith("#") or raw.startswith("＃"):
+            ai_result = await agent.ai_suggest_intent(raw)
+            await agent.reply_ai_suggestions(msg, ai_result, raw)
+            return
         session = sessions[msg.sender]
         items = []
         for m in msg.message:
             m["id"] = msg.message_id
             if m["type"] not in ["image", "text", "face"]:
                 await msg.reply(
-                    "当前版本仅支持文字、图片、表情～\n如需发送其他类型，请用 #反馈 告诉我们\n请不要使用QQ的回复/引用功能，该功能无法被机器人理解"
+                    "当前版本仅支持文字、图片、表情～\n如需发送其他类型, 请用 #反馈 告诉我们\n请不要使用QQ的回复/引用功能, 该功能无法被机器人理解"
                 )
                 await bot.send_group(
                     config.GROUP,
@@ -535,32 +328,15 @@ async def content(msg: PrivateMessage):
         if items:
             session.contents.append(items)
         return
-
-    if raw.startswith("#") or raw.startswith("＃"):
-        if not is_known_command(raw):
-            ctx_summary = "用户当前不在投稿会话"
-            ai_result = await ai_suggest_intent(raw, ctx_summary)
-            await _reply_ai_suggestions(msg, ai_result, raw)
-        else:
-            return
-        return
-
-    # await msg.reply("收到，你的消息我交给智能助手分析，请稍等...")
-    ctx_summary = "用户当前不在投稿会话"
-    ai_result = await ai_suggest_intent(raw, ctx_summary)
-    await _reply_ai_suggestions(msg, ai_result, raw)
-
-
-    # 审计：把该交互记录到管理员群（可删除或替换为日志）
-    #try:
-    #    await bot.send_group(config.GROUP, f"AI 帮助记录 用户 {msg.sender} 原文: {raw}\nAI 建议: {json.dumps(ai_result.get('intent_candidates', []), ensure_ascii=False)}")
-    #except Exception:
-    #    bot.getLogger().warning("Failed to send AI log to group")
+    if agent.is_known_command(raw):
+        return  # 已知命令由 @bot.on_cmd 处理, 不进入AI
+    ai_result = await agent.ai_suggest_intent(raw)
+    await agent.reply_ai_suggestions(msg, ai_result, raw)
 
 
 @bot.on_notice()
 async def recall(r: PrivateRecall):
-    ses = sessions.get(User(nickname=None, user_id=r.user_id))
+    ses = sessions.get(User(nickname=None, user_id=r.user_id))  # type: ignore
     if not ses:
         return
     ses.contents = [c for c in ses.contents if c[0]["id"] != r.message_id]
@@ -773,6 +549,7 @@ async def publish(ids: Sequence[int | str]) -> str:
         )
     return tid
 
+
 async def update_name():
     bot.getLogger().debug("更新群备注")
     waiting = Article.select().where(Article.tid == "wait")
@@ -790,7 +567,7 @@ async def update_name():
 @scheduler.scheduled_job(IntervalTrigger(hours=1))
 async def clear():
     async with lock:
-        # 注意：遍历 dict 时不可直接修改，先收集要移除的 key
+        # 注意:  遍历 dict 时不可直接修改, 先收集要移除的 key
         to_remove = []
         for sess in list(sessions.keys()):
             try:
@@ -820,7 +597,7 @@ async def clear():
 @bot.on_cmd(
     "重置",
     help_msg=(
-        "清空指定用户的投稿次数限制（包括当天匿名投稿）\n"
+        "清空指定用户的投稿次数限制(包括当天匿名投稿)\n"
         "示例: #重置 12345 67890  → 清空指定用户"
     ),
     targets=[config.GROUP],
@@ -828,7 +605,7 @@ async def clear():
 async def reset_limits(msg: GroupMessage):
     parts = msg.raw_message.split(" ")
     if len(parts) <= 1:
-        await msg.reply("❌ 请带上用户ID，例如：#重置 10001")
+        await msg.reply("❌ 请带上用户ID, 例如:  #重置 10001")
         return
 
     user_ids = [int(uid) for uid in parts[1:] if uid.isdigit()]
@@ -837,7 +614,7 @@ async def reset_limits(msg: GroupMessage):
         return
 
     today = datetime.now().date()
-    # 只清空计数表，不删除实际投稿
+    # 只清空计数表, 不删除实际投稿
     SubmissionCount.delete().where(
         (SubmissionCount.user_id.in_(user_ids)) & (SubmissionCount.date == today)
     ).execute()
@@ -846,13 +623,12 @@ async def reset_limits(msg: GroupMessage):
     for uid in user_ids:
         try:
             await bot.send_private(
-                uid,
-                f"✅ 你的当天投稿次数限制已被管理员重置，你今天可以继续投稿了！"
+                uid, f"✅ 你的当天投稿次数限制已被管理员重置, 你今天可以继续投稿了! "
             )
         except Exception as e:
             bot.getLogger().warning(f"给用户 {uid} 发送重置通知失败: {e}")
 
-    await msg.reply(f"✅ 已重置用户 {user_ids} 的投稿次数限制，并已通知！")
+    await msg.reply(f"✅ 已重置用户 {user_ids} 的投稿次数限制, 并已通知! ")
 
 
 @bot.on_cmd(
