@@ -333,14 +333,23 @@ async def feedback(msg: PrivateMessage):
 async def content(msg: PrivateMessage):
     raw = msg.raw_message or ""
 
+    async def agent_reply(msg):
+        await bot.call_api(
+            "set_input_status", {"user_id": msg.sender.user_id, "event_type": 1}
+        )
+        ai_result = await agent.ai_suggest_intent(raw)
+        await bot.call_api(
+            "set_input_status", {"user_id": msg.sender.user_id, "event_type": 2}
+        )
+        await agent.reply_ai_suggestions(msg, ai_result)
+
     # 先处理投稿会话
     if msg.sender in sessions:
         # 如果是已知命令, 直接忽略, 不加入投稿内容
         if agent.is_known_command(raw):
             return  # 已知命令由 @bot.on_cmd 处理, 不加入投稿
         elif raw.startswith("#") or raw.startswith("＃"):
-            ai_result = await agent.ai_suggest_intent(raw)
-            await agent.reply_ai_suggestions(msg, ai_result, raw)
+            await agent_reply(msg)
             return
         session = sessions[msg.sender]
         items = []
@@ -361,8 +370,7 @@ async def content(msg: PrivateMessage):
         return
     if agent.is_known_command(raw):
         return  # 已知命令由 @bot.on_cmd 处理, 不进入AI
-    ai_result = await agent.ai_suggest_intent(raw)
-    await agent.reply_ai_suggestions(msg, ai_result, raw)
+    await agent_reply(msg)
 
 
 @bot.on_notice()

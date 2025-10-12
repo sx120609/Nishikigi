@@ -146,7 +146,7 @@ async def ai_suggest_intent(raw: str) -> dict:
     return resp_obj
 
 
-async def reply_ai_suggestions(msg: PrivateMessage, ai_result: dict, raw: str):
+async def reply_ai_suggestions(msg: PrivateMessage, ai_result: dict):
     candidates = (
         ai_result.get("intent_candidates", []) if isinstance(ai_result, dict) else []
     )
