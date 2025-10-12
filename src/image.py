@@ -41,7 +41,7 @@ async def generate_img(
                         )
                 case "text":
                     values.append(
-                        d["data"]["text"].replace("\r\n", "\n").replace("\n", "<br>")
+                        d["data"]["text"].replace("\r\n", "\n").replace("\n", "<br/>")
                     )
                 case "face":
                     values.append(
@@ -92,7 +92,9 @@ async def screenshoot(id: int, output_path: str):
                     bod.scrollHeight, bod.offsetHeight, bod.clientHeight
                 ) - 100;
                 const el = document.querySelector('.blur-bg');
-                el.style.height = h + 'px';
+                if (h <= 1500) {
+                    el.style.height = h + 'px';
+                }
                 return h;
             }
         """

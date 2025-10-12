@@ -122,6 +122,8 @@
                         <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
                     {% elif item.startswith('_file://') %}
                         <img src="{{ item[1:] }}" alt="表情" class="face">
+                    {% elif item == "<br/>" %}
+                        <br/>
                     {% else %}
                         {{ item }}
                     {% endif %}
