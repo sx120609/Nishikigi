@@ -41,7 +41,9 @@ async def generate_img(
                         )
                 case "text":
                     values.append(
-                        d["data"]["text"].replace("\r\n", "\n").replace("\n", "<br/>")
+                        d["data"]["text"]
+                        .replace("\r\n", "\n")
+                        .replace("\n", "__internal_br__")
                     )
                 case "face":
                     values.append(
