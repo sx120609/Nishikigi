@@ -2,7 +2,6 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>匿名消息</title>
     <style>
         body {
             font-family: "SF Pro", "PingFang SC", Arial, sans-serif;
@@ -15,8 +14,12 @@
             letter-spacing: 0.5px;
         }
         .card {
+            display: flex;
+            flex-direction: column;
             padding: 0px 30px;
             min-width: 100%;
+            min-height: 720px;
+            justify-content: space-between; 
         }
         .user {
             display: flex;
@@ -77,56 +80,57 @@
             color: transparent;
             text-shadow: 0 2px 20px rgba(0, 114, 255, 0.15);
         }
-
     </style>
 </head>
 
 <body>
 <div class="card">
-    <div style="display: flex; justify-content: space-between;">
-        <div class="user">
-            <div class="avatar">
-                <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
-            </div>
-            <div >
-                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 44px; font-weight: bold;">
-                {{ username }}
+    <div>
+        <div style="display: flex; justify-content: space-between;">
+            <div class="user">
+                <div class="avatar">
+                    <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
                 </div>
-                <div style="font-size: 28px; color: gray;">
-                {{ user_id }}
+                <div >
+                    <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
+                    {{ username }}
+                    </div>
+                    <div style="font-size: 24px; color: gray;">
+                    {{ user_id }}
+                    </div>
                 </div>
             </div>
-        </div>
-         <div class="qrcode">
-                <img src="{{ qrcode }}" alt="">
-                <br/>
-                扫二维码加好友
-        </div>
-    </div>
-    <br/>
-    {% for items in contents %}
-        <div class="message">
-            {% for item in items %}
-                {% if item.startswith('file://') %}
-                    <img src="{{ item }}" alt="图片跑路了">
-                {% elif item.startswith('face://') %}
-                    <img src="file://{{ item[7:] }}" alt="表情", class="cqface">
-                {% else %}
-                    {{ item }}
-                {% endif %}
-            {% endfor %}
+            <div class="qrcode">
+                    <img src="{{ qrcode }}" alt="">
+                    <br/>
+                    扫二维码加好友
+            </div>
         </div>
         <br/>
-    {% endfor %}
-
-    <br/>
-    
-    <div style="display: flex; justify-content: right; margin-top: 42px">
-        Powered by Nishikigi
+        {% for items in contents %}
+            <div class="message">
+                {% for item in items %}
+                    {% if item.startswith('file://') %}
+                        <img src="{{ item }}" alt="图片跑路了">
+                    {% elif item.startswith('face://') %}
+                        <img src="file://{{ item[7:] }}" alt="表情", class="cqface">
+                    {% else %}
+                        {{ item }}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <br/>
+        {% endfor %}
     </div>
-    <div style="display: flex; justify-content: space-between;">
-        <div> {{ date }}</div>
-        <div>由 筑梦云间·网站社 开发</div>
+
+    <div>
+        <div style="display: flex; justify-content: right; margin-top: 42px">
+            Powered by Nishikigi
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <div> {{ date }}</div>
+            <div>由 筑梦云间·网站社 开发</div>
+        </div>
     </div>
 </div>
 

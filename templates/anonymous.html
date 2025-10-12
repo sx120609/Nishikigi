@@ -2,7 +2,6 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>匿名消息</title>
     <style>
         body {
             font-family: "SF Pro", "PingFang SC", Arial, sans-serif;
@@ -15,8 +14,12 @@
             letter-spacing: 0.5px;
         }
         .card {
+            display: flex;
+            flex-direction: column;
             padding: 0px 30px;
             min-width: 100%;
+            min-height: 720px;
+            justify-content: space-between; 
         }
         .user {
             display: flex;
@@ -60,48 +63,47 @@
             padding: 0 !important;
             transform: translateY(-0.1em);
         }
-
     </style>
 </head>
 
 <body>
 <div class="card">
-    <div style="display: flex; justify-content: space-between;">
-        <div class="user">
-            <div class="avatar">
-                <img src="https://q1.qlogo.cn/g?b=qq&nk=1&s=100" alt="头像">
-            </div>
-            <div class="nickname">
-                <div style="font-size: 52px; font-weight: bold;">
-                匿名用户
+    <div>
+        <div style="display: flex; justify-content: space-between;">
+            <div class="user">
+                <div class="avatar">
+                    <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
+                </div>
+                <div style="font-size: 48px; font-weight: bold;">
+                        匿名用户
                 </div>
             </div>
         </div>
-    </div>
-    <br/>
-    {% for items in contents %}
-        <div class="message">
-            {% for item in items %}
-                {% if item.startswith('file://') %}
-                    <img src="{{ item }}" alt="图片跑路了">
-                {% elif item.startswith('face://') %}
-                    <img src="file://{{ item[7:] }}" alt="表情", class="cqface">
-                {% else %}
-                    {{ item }}
-                {% endif %}
-            {% endfor %}
-        </div>
         <br/>
-    {% endfor %}
-
-    <br/>
-    
-    <div style="display: flex; justify-content: right; margin-top: 42px">
-        Powered by Nishikigi
+        {% for items in contents %}
+            <div class="message">
+                {% for item in items %}
+                    {% if item.startswith('file://') %}
+                        <img src="{{ item }}" alt="图片跑路了">
+                    {% elif item.startswith('face://') %}
+                        <img src="file://{{ item[7:] }}" alt="表情", class="cqface">
+                    {% else %}
+                        {{ item }}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <br/>
+        {% endfor %}
     </div>
-    <div style="display: flex; justify-content: space-between;">
-        <div> {{ date }}</div>
-        <div>由 筑梦云间·网站社 开发</div>
+
+    <div>
+        <div style="display: flex; justify-content: right; margin-top: 42px">
+            Powered by Nishikigi
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <div> {{ date }}</div>
+            <div>由 筑梦云间·网站社 开发</div>
+        </div>
     </div>
 </div>
 
