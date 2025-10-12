@@ -126,7 +126,7 @@
                     {% elif item.startswith('_file://') %}
                         <img src="{{ item[1:] }}" alt="表情" class="face">
                     {% else %}
-                        {{ item | replace("__internal_br__") }}
+                        {{ item | replace("__internal_br__", "<br>") | safe }}
                     {% endif %}
                 {% endfor %}
             </div>
