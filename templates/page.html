@@ -104,36 +104,22 @@
     <div>
         <div class="user">
             <div class="avatar">
-                <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
+                <img src="https://q1.qlogo.cn/g?b=qq&nk=858479588&s=100" alt="头像">
             </div>
             <div >
-                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
-                {{ username }}
+                <div class="rainbow" style="font-size: 46px; font-weight: bold;">
+                Mom0ka27
                 </div>
                 <div style="font-size: 24px; color: gray;">
-                {{ user_id }}
+                858479588
                 </div>
             </div>
         </div>
         <br/>
-        {% for items in contents %}
-            <div class="message {% if items[0] == '' %}message_border{% endif %}" >
-                {% for item in items[1:] %}
-                    {% if item.startswith('file://') %}
-                        <img src="{{ item[7:] }}" alt="图片跑路了">
-                    {% elif item.startswith('face://') %}
-                        <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
-                    {% elif item.startswith('_file://') %}
-                        <img src="{{ item[1:] }}" alt="表情" class="face">
-                    {% elif item == "&lt;br/&gt;" %}
-                        <br/>
-                    {% else %}
-                        {{ item }}
-                    {% endif %}
-                {% endfor %}
+            <div class="message message_border" >
+                        “你有心目中最伟大的世界发明top10吗？”她问。&lt;br/&gt;我说：“top10是蚊香。”&lt;br/&gt;“蚊香？”&lt;br/&gt;“对，就是那种一圈圈盘起来的黑色蚊香。它燃烧的时候像在给自己念经，烟是竖着往上走的，特别虔诚。我小时候以为点一盘蚊香就能超度全世界的蚊子。”&lt;br/&gt;她笑：“好傻。”&lt;br/&gt;我说：“后来发现它超度不了任何蚊子，只能让它们迷路。就像有些道理，绕来绕去其实都在原地。”&lt;br/&gt;“那 top9呢？”&lt;br/&gt;“是公交车上那个‘STOP&#39;按钮。”&lt;br/&gt;她说：“你这跨度。”&lt;br/&gt;“按下去的瞬间会发出‘叮’的一声，特别清脆。”我说，“有次放学，我故意多坐了三站，就为了多按几次。司机从后视镜瞪我，眼睛比红灯还亮。”&lt;br/&gt;“就因为这？”“对，那天我错过了晚饭，但听到了七声‘叮’。回家我爸问我干嘛去了，我说在练习让世界停下来。”&lt;br/&gt;她说：“你小时候是不是经常挨打？”&lt;br/&gt;“有一点。”&lt;br/&gt;&#34;top 8?&#34;&lt;br/&gt;“自动铅笔的替芯。”&lt;br/&gt;“我们现在在讨论伟大的发明对吧。”&lt;br/&gt;“0.5mm的HB替芯真的很伟大，它知道自己终将粉身碎骨，还是义无反顾地往前挤。有时候写错字用橡皮擦，它留下的痕迹比记忆还淡。”&lt;br/&gt;“你是说它很卑微？”&lt;br/&gt;“不，它知道自己会变成别的字。”&lt;br/&gt;她说：“这很你。”&lt;br/&gt;“top 7呢？”&lt;br/&gt;“下雨天窗上的雨痕。”&lt;br/&gt;“你现在说什么我都觉得合理了。”&lt;br/&gt;我说：“雨痕从来不走直线，它们像在找什么。有条雨痕特别倔，横着走了十厘米，最后撞上另一条，一起掉进窗框的缝隙里。”&lt;br/&gt;她说：“你观察得真细。”&lt;br/&gt;“不是，主要那天数学考砸了，我看着窗户发了四十分钟呆。”&lt;br/&gt;“那top6是超市里的购物车。”&lt;br/&gt;“轮子永远有一个是歪的对不对？”&lt;br/&gt;“对，它发出咯噔咯噔的声音，像在提醒你人生不可能一帆风顺。最孤独的是，所有购物车最后都要回到那个金属栏杆里，一个挨一个，像在排队领取来世的号码牌。”&lt;br/&gt;她说：“你这说得我都有点难过。”&lt;br/&gt;“top 5，微波炉热完东西后的‘叮’。”&lt;br/&gt;“你今天跟声音杠上了。”&lt;br/&gt;“那声‘叮’之后的世界特别安静，仿佛全宇宙都在等你去开门。有次我热了五分钟的牛奶，忘记去拿，后来它凉了。我觉得我辜负了那声‘叮’。”&lt;br/&gt;她说：“你戏真多。”
             </div>
             <br/>
-        {% endfor %}
     </div>
 
     <div>
@@ -141,7 +127,7 @@
             Powered by Nishikigi
         </div>
         <div style="display: flex; justify-content: space-between;">
-            <div> {{ date }}</div>
+            <div> 2025-10-12 20:01:24</div>
             <div>由 筑梦云间·网站社 开发</div>
         </div>
     </div>
