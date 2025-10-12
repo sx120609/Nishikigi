@@ -4,22 +4,30 @@
     <meta charset="UTF-8">
     <style>
         body {
-            font-family: "SF Pro", "PingFang SC", Arial, sans-serif;
+            font-family: "SF Pro", "PingFang SC", "Apple Color Emoji", Arial, sans-serif;
             align-items: center;
             width: 720px;
+            min-height: 720px;
             background-color: #f0f0f0;
             display: flex;
             justify-content: center;
-            padding: 54px 42px;
             letter-spacing: 0.5px;
         }
         .card {
             display: flex;
             flex-direction: column;
-            padding: 0px 30px;
-            min-width: 100%;
-            min-height: 720px;
+            margin: 70px;
+            padding: 30px;
+            width: 100%;
+            min-height: 480px;
             justify-content: space-between; 
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            box-shadow: 4px 8px 32px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         .user {
             display: flex;
@@ -32,37 +40,34 @@
             margin-right: 28px;
             border-radius: 50%;
             object-fit: cover;
-            box-shadow: 0 0 8px rgba(255,255,255,0.6),  /* 白色柔光 */
-                0 0 16px rgba(0,0,0,0.25);       /* 再加一点阴影层次 */
-        }
-        .qrcode {
-            text-align: center;
-            font-size: 12px;
-            color: gray;
-        }
-        .qrcode img {
-            width: 100px;
-            height: 100px;
-            object-fit: cover;
+            box-shadow: 4px 8px 16px rgba(0,0,0,0.25);       /* 再加一点阴影层次 */
         }
         .message {
-            background: #ffffff;   /* 白色气泡 */
             display: inline-block;
             max-width: 100%;
-            border-radius: 20px;
-            padding: 8px 16px;
+            border-radius: 24px;
             margin-bottom: 18px;
             line-height: 1.5;
             font-size: 36px;
             word-wrap: break-word;
-            box-shadow: 0 0 8px rgba(255,255,255,0.6),  /* 白色柔光 */
-                        0 0 16px rgba(0,0,0,0.15);   
+        }
+        .message_border {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 4px 8px 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         .message img {
             max-width: 480px;
-            border-radius: 20px;
+            border-radius: 24px;
             display: block;
             margin: 8px 0px;
+       }
+        .face {
+            height: 240px !important;
+            margin: 0px !important;
        }
         .cqface {
             vertical-align: middle;
@@ -80,40 +85,46 @@
             color: transparent;
             text-shadow: 0 2px 20px rgba(0, 114, 255, 0.15);
         }
+
+        .blur-bg {
+            width: 100%;
+            position: absolute;
+            background: radial-gradient(at 30% 30%, rgba(255, 0, 150, 0.1), transparent 60%),
+                        radial-gradient(at 70% 70%, rgba(0, 200, 255, 0.15), transparent 60%),
+                        radial-gradient(at 50% 50%, rgba(255, 255, 0, 0.15), transparent 60%);
+            filter: blur(100px);
+            z-index: -1;
+        }
     </style>
 </head>
 
 <body>
+<div class="blur-bg"></div>
 <div class="card">
     <div>
-        <div style="display: flex; justify-content: space-between;">
-            <div class="user">
-                <div class="avatar">
-                    <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
-                </div>
-                <div >
-                    <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
-                    {{ username }}
-                    </div>
-                    <div style="font-size: 24px; color: gray;">
-                    {{ user_id }}
-                    </div>
-                </div>
+        <div class="user">
+            <div class="avatar">
+                <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
             </div>
-            <div class="qrcode">
-                    <img src="{{ qrcode }}" alt="">
-                    <br/>
-                    扫二维码加好友
+            <div >
+                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
+                {{ username }}
+                </div>
+                <div style="font-size: 24px; color: gray;">
+                {{ user_id }}
+                </div>
             </div>
         </div>
         <br/>
         {% for items in contents %}
-            <div class="message">
-                {% for item in items %}
+            <div class="message {% if items[0] == '' %}message_border{% endif %}" >
+                {% for item in items[1:] %}
                     {% if item.startswith('file://') %}
-                        <img src="{{ item }}" alt="图片跑路了">
+                        <img src="{{ item[7:] }}" alt="图片跑路了">
                     {% elif item.startswith('face://') %}
-                        <img src="file://{{ item[7:] }}" alt="表情", class="cqface">
+                        <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
+                    {% elif item.startswith('_file://') %}
+                        <img src="{{ item[1:] }}" alt="表情" class="face">
                     {% else %}
                         {{ item }}
                     {% endif %}
@@ -133,6 +144,5 @@
         </div>
     </div>
 </div>
-
 </body>
 </html>
