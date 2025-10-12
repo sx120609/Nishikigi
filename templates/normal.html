@@ -70,6 +70,13 @@
             padding: 0 !important;
             transform: translateY(-0.1em);
         }
+        .rainbow {
+            background: linear-gradient(90deg, #fbc2eb, #a6c1ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            text-shadow: 0 2px 20px rgba(0, 114, 255, 0.15);
+        }
 
     </style>
 </head>
@@ -81,8 +88,8 @@
             <div class="avatar">
                 <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
             </div>
-            <div class="nickname">
-                <div style="font-size: 44px; font-weight: bold;">
+            <div >
+                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 44px; font-weight: bold;">
                 {{ username }}
                 </div>
                 <div style="font-size: 28px; color: gray;">

@@ -2,16 +2,23 @@ from datetime import datetime
 import os
 
 from botx.models import User
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 import playwright.async_api
 import qrcode
 
 
-async def generate_img(id: int, user: User | None, contents: list) -> str:
+async def generate_img(
+    id: int, user: User | None, contents: list, admin: bool = False
+) -> str:
     env = Environment(
         loader=FileSystemLoader("templates"),
         trim_blocks=True,
         lstrip_blocks=True,
+        autoescape=select_autoescape(
+            [
+                "html",
+            ]
+        ),
     )
     _contents = []
     for items in contents:
@@ -46,6 +53,7 @@ async def generate_img(id: int, user: User | None, contents: list) -> str:
         username=None if user == None else user.nickname,
         user_id=None if user == None else user.user_id,
         qrcode=os.path.abspath(f"./data/{id}/qrcode.png") if user else None,
+        admin=admin,
     )
     with open(f"./data/{id}/page.html", mode="w") as f:
         f.write(output)

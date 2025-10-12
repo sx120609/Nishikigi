@@ -242,9 +242,17 @@ async def end(msg: PrivateMessage):
                                 file.write(chunk)
                     bot.getLogger().info(f"下载图片: {filepath}")
 
+    vips = (await bot.call_api("get_group_member_list", {"group_id": config.GROUP}))[
+        "data"
+    ]
+
     path = await image.generate_img(
-        ses.id, user=None if ses.anonymous else msg.sender, contents=ses.contents
+        ses.id,
+        user=None if ses.anonymous else msg.sender,
+        contents=ses.contents,
+        admin=any(map(lambda v: v["user_id"] == msg.sender.user_id, vips)),
     )
+
     await msg.reply(
         f"[CQ:image,file={get_file_url(path)}]这样投稿可以吗😘\n可以的话请发送:  \n\n#确认\n\n不可以就发送:  \n\n#取消"
     )
