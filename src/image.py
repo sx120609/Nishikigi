@@ -74,14 +74,14 @@ async def generate_img(
         except Exception:
             avatar_path = None
         if avatar_path:
-            avatar_src = f"file://{avatar_path}"
+            avatar_src = _avatar_src_for_template(avatar_path, id)
     elif avatar_seed is not None:
         try:
             avatar_path = _generate_anonymous_avatar(avatar_seed, id)
         except Exception:
             avatar_path = None
         if avatar_path:
-            avatar_src = f"file://{avatar_path}"
+            avatar_src = _avatar_src_for_template(avatar_path, id)
 
     output = env.get_template("normal.html" if user else "anonymous.html").render(
         contents=_contents,
@@ -329,3 +329,19 @@ async def _download_avatar(user_id: int, post_id: int) -> str | None:
             os.remove(avatar_path)
         return None
     return avatar_path
+
+
+def _avatar_src_for_template(path: str, post_id: int) -> str:
+    """Return a template-friendly relative src for an avatar stored on disk."""
+
+    data_dir = os.path.abspath(f"./data/{post_id}")
+    abs_path = os.path.abspath(path)
+    try:
+        relative = os.path.relpath(abs_path, data_dir)
+    except ValueError:
+        # On different drives (Windows) fall back to basename.
+        relative = os.path.basename(abs_path)
+    if not relative.startswith("."):
+        # Ensure browsers resolve from the current directory.
+        relative = f"./{relative}"
+    return relative
