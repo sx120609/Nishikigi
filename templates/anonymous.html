@@ -13,14 +13,14 @@
             align-items: center;
             justify-content: center;
             letter-spacing: 0.5px;
-            padding: 56px 0;
+            padding: 80px 0;
         }
         .card {
             position: relative;
-            width: 640px;
-            min-height: 540px;
+            width: 580px;
+            min-height: 520px;
             border-radius: 42px;
-            padding: 52px;
+            padding: 48px;
             box-sizing: border-box;
             background: linear-gradient(145deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.06));
             box-shadow: 0 36px 80px rgba(62, 93, 136, 0.25);
@@ -45,12 +45,13 @@
             display: flex;
             flex-direction: column;
             min-height: 100%;
-            justify-content: space-between;
+            justify-content: flex-start;
+            gap: 48px;
         }
         .user {
             display: flex;
             align-items: center;
-            margin-bottom: 28px;
+            margin-bottom: 32px;
         }
         .avatar img {
             width: 96px;
@@ -64,26 +65,44 @@
         .messages {
             display: flex;
             flex-direction: column;
-            gap: 18px;
+            gap: 24px;
+            align-items: flex-start;
         }
         .message {
-            display: block;
+            display: flex;
             width: 100%;
-            border-radius: 24px;
-            line-height: 1.5;
+        }
+        .bubble {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            border-radius: 26px;
+            line-height: 1.55;
             font-size: 32px;
             word-wrap: break-word;
+            word-break: break-word;
+            text-align: left;
+            max-width: 100%;
+            background: transparent;
         }
-        .message_border {
-            padding: 18px 24px;
-            background: linear-gradient(120deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0.14));
-            box-shadow: 0 18px 36px rgba(74, 106, 157, 0.25);
+        .bubble--text {
+            padding: 22px 28px;
+            background: linear-gradient(120deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16));
+            box-shadow: 0 20px 40px rgba(74, 106, 157, 0.22);
             backdrop-filter: blur(22px);
             -webkit-backdrop-filter: blur(22px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            max-width: min(520px, 100%);
         }
-        .message img {
-            max-width: 480px;
+        .bubble--media {
+            padding: 0;
+            max-width: min(520px, 100%);
+            background: none;
+            box-shadow: none;
+            border: none;
+        }
+        .bubble img {
+            max-width: 520px;
             border-radius: 24px;
             display: block;
             margin: 8px 0px;
@@ -110,35 +129,44 @@
         }
 
         .card-content {
-            padding: 34px 36px;
+            padding: 40px 42px;
             border-radius: 28px;
             background: linear-gradient(165deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.08));
             border: 1px solid rgba(255, 255, 255, 0.42);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
         }
         .footer {
-            margin-top: 48px;
+            margin-top: auto;
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
-            gap: 24px;
+            align-items: center;
+            gap: 32px;
             color: rgba(40, 60, 100, 0.7);
         }
         .footer-info {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
         .footer-brand {
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 600;
-            color: rgba(30, 48, 88, 0.9);
+            color: rgba(30, 48, 88, 0.92);
         }
         .footer-date {
             font-size: 22px;
+            letter-spacing: 0.3px;
         }
-        .footer-right {
-            font-size: 22px;
+        .footer-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            font-size: 21px;
+            line-height: 1.4;
             text-align: right;
         }
     </style>
@@ -160,18 +188,20 @@
             </div>
             <div class="messages">
                 {% for items in contents %}
-                    <div class="message {% if items[0] == '' %}message_border{% endif %}" >
-                        {% for item in items[1:] %}
-                            {% if item.startswith('file://') %}
-                                <img src="{{ item[7:] }}" alt="图片跑路了">
-                            {% elif item.startswith('face://') %}
-                                <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
-                            {% elif item.startswith('_file://') %}
-                                <img src="{{ item[1:] }}" alt="表情" class="face">
-                            {% else %}
-                                {{ item | replace("__internal_br__", "<br>") | safe }}
-                            {% endif %}
-                        {% endfor %}
+                    <div class="message">
+                        <div class="bubble {% if items[0] == '' %}bubble--text{% else %}bubble--media{% endif %}">
+                            {% for item in items[1:] %}
+                                {% if item.startswith('file://') %}
+                                    <img src="{{ item[7:] }}" alt="图片跑路了">
+                                {% elif item.startswith('face://') %}
+                                    <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
+                                {% elif item.startswith('_file://') %}
+                                    <img src="{{ item[1:] }}" alt="表情" class="face">
+                                {% else %}
+                                    {{ item | replace("__internal_br__", "<br>") | safe }}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
                     </div>
                 {% endfor %}
             </div>
@@ -182,9 +212,9 @@
                 <div class="footer-brand">中国药科大学表白墙</div>
                 <div class="footer-date">{{ date }}</div>
             </div>
-            <div class="footer-right">
-                Powered by Nishikigi<br>
-                QQ: 3644295479
+            <div class="footer-meta">
+                <div>Powered by Nishikigi</div>
+                <div>QQ · 3644295479</div>
             </div>
         </div>
     </div>
