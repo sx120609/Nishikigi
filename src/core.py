@@ -251,6 +251,7 @@ async def end(msg: PrivateMessage):
         user=None if ses.anonymous else msg.sender,
         contents=ses.contents,
         admin=any(map(lambda v: v["user_id"] == msg.sender.user_id, vips)),
+        avatar_seed=msg.sender.user_id if ses.anonymous else None,
     )
 
     await msg.reply(

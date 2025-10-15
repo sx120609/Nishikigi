@@ -40,7 +40,7 @@
             margin-right: 28px;
             border-radius: 50%;
             object-fit: cover;
-            box-shadow: 4px 8px 16px rgba(0,0,0,0.25);       /* 再加一点阴影层次 */
+            box-shadow: 4px 8px 16px rgba(0,0,0,0.25);
         }
         .message {
             display: inline-block;
@@ -104,11 +104,11 @@
     <div>
         <div class="user">
             <div class="avatar">
-                <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
+                <img src="{{ avatar_src }}" alt="头像">
             </div>
-            <div >
-                <div style="font-size: 48px; font-weight: bold;">
-                    匿名用户
+            <div>
+                <div style="font-size: 46px; font-weight: bold;">
+                匿名用户
                 </div>
             </div>
         </div>
@@ -137,7 +137,7 @@
         </div>
         <div style="display: flex; justify-content: space-between;">
             <div> {{ date }}</div>
-            <div>中国药科大学校园墙 3644295479</div>
+            <div>由 中国药科大学表白墙 3644295479 开发</div>
         </div>
     </div>
 </div>
