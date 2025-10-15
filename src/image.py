@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 import os
 from typing import Final
@@ -58,6 +59,16 @@ async def generate_img(
     #     img = qr.make_image(back_color="#f0f0f0")
     #     img.save(f"./data/{id}/qrcode.png")  # type: ignore
 
+    avatar_path: str | None = None
+    avatar_src = _AVATAR_PLACEHOLDER
+    if user is not None:
+        try:
+            avatar_path = await _download_avatar(user.user_id, id)
+        except Exception:
+            avatar_path = None
+        if avatar_path:
+            avatar_src = f"file://{avatar_path}"
+
     output = env.get_template("normal.html" if user else "anonymous.html").render(
         contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -65,10 +76,15 @@ async def generate_img(
         user_id=None if user == None else user.user_id,
         # qrcode=os.path.abspath(f"./data/{id}/qrcode.png") if user else None,
         admin=admin,
+        avatar_src=avatar_src,
     )
     with open(f"./data/{id}/page.html", mode="w") as f:
         f.write(output)
-    await screenshoot(id=id, output_path=f"./data/{id}/image.png")
+    try:
+        await screenshoot(id=id, output_path=f"./data/{id}/image.png")
+    finally:
+        if avatar_path and os.path.exists(avatar_path):
+            os.remove(avatar_path)
     return os.path.abspath(f"./data/{id}/image.png")
 
 
@@ -77,28 +93,15 @@ _HEIGHT_SCRIPT: Final[str] = """
     const doc = document.documentElement;
     const bod = document.body;
     const card = document.querySelector('.card');
-    const blur = document.querySelector('.blur-bg');
-    const height = card
-        ? Math.max(card.scrollHeight, card.offsetHeight, card.clientHeight)
-        : Math.max(
-            doc.scrollHeight, doc.offsetHeight, doc.clientHeight,
-            bod.scrollHeight, bod.offsetHeight, bod.clientHeight
-        );
-    if (blur) {
-        const limited = Math.min(height + 120, 1500);
-        blur.style.height = `${limited}px`;
+    if (card) {
+        return Math.max(card.scrollHeight, card.offsetHeight, card.clientHeight);
     }
-    return height;
+    return Math.max(
+        doc.scrollHeight, doc.offsetHeight, doc.clientHeight,
+        bod.scrollHeight, bod.offsetHeight, bod.clientHeight
+    );
 }
 """
-
-
-def _select_scale(height: float) -> int:
-    if height <= 2400:
-        return 3
-    if height <= 4800:
-        return 2
-    return 1
 
 
 async def _prepare_page(browser: playwright.async_api.Browser, id: int, scale: int):
@@ -123,8 +126,7 @@ async def screenshoot(id: int, output_path: str):
         temp_page, height = await _prepare_page(browser, id, scale=1)
         await temp_page.close()
 
-        device_scale = _select_scale(height)
-        page, height = await _prepare_page(browser, id, scale=device_scale)
+        page, height = await _prepare_page(browser, id, scale=3)
 
         viewport_height = max(720, min(int(height) + 120, 4096))
         await page.set_viewport_size({"width": 720, "height": viewport_height})
@@ -136,4 +138,32 @@ async def screenshoot(id: int, output_path: str):
             omit_background=True,
             animations="disabled",
         )
+        await page.close()
         await browser.close()
+
+
+_AVATAR_PLACEHOLDER: Final[str] = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="
+)
+
+
+async def _download_avatar(user_id: int, post_id: int) -> str | None:
+    avatar_path = os.path.abspath(f"./data/{post_id}/avatar.png")
+    url = f"https://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
+    process = await asyncio.create_subprocess_exec(
+        "curl",
+        "-fsSL",
+        "--connect-timeout",
+        "10",
+        "--max-time",
+        "20",
+        url,
+        "-o",
+        avatar_path,
+    )
+    return_code = await process.wait()
+    if return_code != 0 or not os.path.exists(avatar_path) or os.path.getsize(avatar_path) == 0:
+        if os.path.exists(avatar_path):
+            os.remove(avatar_path)
+        return None
+    return avatar_path
