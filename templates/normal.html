@@ -12,15 +12,33 @@
             display: flex;
             justify-content: center;
             letter-spacing: 0.5px;
+            margin: 0;
+        }
+        .blur-bg {
+            width: 100%;
+            position: absolute;
+            background: radial-gradient(at 30% 30%, rgba(255, 0, 150, 0.1), transparent 60%),
+                        radial-gradient(at 70% 70%, rgba(0, 200, 255, 0.15), transparent 60%),
+                        radial-gradient(at 50% 50%, rgba(255, 255, 0, 0.15), transparent 60%);
+            filter: blur(100px);
+            z-index: -1;
+            inset: 0;
+        }
+        .card-wrapper {
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            padding: 40px;
+            box-sizing: border-box;
         }
         .card {
             display: flex;
             flex-direction: column;
-            margin: 40px;
             padding: 30px;
             width: 100%;
             min-height: 480px;
-            justify-content: space-between; 
+            justify-content: space-between;
             z-index: 1;
             background: rgba(255, 255, 255, 0.12);
             border-radius: 24px;
@@ -28,25 +46,34 @@
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            box-sizing: border-box;
         }
         .user {
             display: flex;
             align-items: center;
             margin-bottom: 24px;
+            gap: 28px;
         }
         .avatar img {
             width: 100px;
             height: 100px;
-            margin-right: 28px;
             border-radius: 50%;
             object-fit: cover;
-            box-shadow: 4px 8px 16px rgba(0,0,0,0.25);       /* 再加一点阴影层次 */
+            box-shadow: 4px 8px 16px rgba(0,0,0,0.25);
+        }
+        .user-name {
+            font-size: 46px;
+            font-weight: bold;
+        }
+        .messages {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
         }
         .message {
             display: inline-block;
             max-width: 100%;
             border-radius: 24px;
-            margin-bottom: 18px;
             line-height: 1.5;
             font-size: 32px;
             word-wrap: break-word;
@@ -64,11 +91,11 @@
             border-radius: 24px;
             display: block;
             margin: 8px 0px;
-       }
+        }
         .face {
             height: 240px !important;
             margin: 0px !important;
-       }
+        }
         .cqface {
             vertical-align: middle;
             width: 36px !important;
@@ -85,62 +112,65 @@
             color: transparent;
             text-shadow: 0 2px 20px rgba(0, 114, 255, 0.15);
         }
-
-        .blur-bg {
-            width: 100%;
-            position: absolute;
-            background: radial-gradient(at 30% 30%, rgba(255, 0, 150, 0.1), transparent 60%),
-                        radial-gradient(at 70% 70%, rgba(0, 200, 255, 0.15), transparent 60%),
-                        radial-gradient(at 50% 50%, rgba(255, 255, 0, 0.15), transparent 60%);
-            filter: blur(100px);
-            z-index: -1;
+        .footer {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: 42px;
+            font-size: 22px;
+            color: rgba(0, 0, 0, 0.6);
+        }
+        .footer-powered {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .footer-meta {
+            display: flex;
+            justify-content: space-between;
         }
     </style>
 </head>
 
 <body>
 <div class="blur-bg"></div>
-<div class="card">
-    <div>
-        <div class="user">
-            <div class="avatar">
-                <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
-            </div>
-            <div >
-                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
-                {{ username }}
+<div class="card-wrapper">
+    <div class="card">
+        <div>
+            <div class="user">
+                <div class="avatar">
+                    <img src="{{ avatar_src }}" alt="头像">
                 </div>
-                <div style="font-size: 24px; color: gray;">
-                {{ user_id }}
+                <div class="user-name {% if admin %}rainbow{% endif %}">
+                    {{ username }}
                 </div>
             </div>
-        </div>
-        <br/>
-        {% for items in contents %}
-            <div class="message {% if items[0] == '' %}message_border{% endif %}" >
-                {% for item in items[1:] %}
-                    {% if item.startswith('file://') %}
-                        <img src="{{ item[7:] }}" alt="图片跑路了">
-                    {% elif item.startswith('face://') %}
-                        <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
-                    {% elif item.startswith('_file://') %}
-                        <img src="{{ item[1:] }}" alt="表情" class="face">
-                    {% else %}
-                        {{ item | replace("__internal_br__", "<br>") | safe }}
-                    {% endif %}
+            <div class="messages">
+                {% for items in contents %}
+                    <div>
+                        <div class="message {% if items[0] == '' %}message_border{% endif %}">
+                            {% for item in items[1:] %}
+                                {% if item.startswith('file://') %}
+                                    <img src="{{ item[7:] }}" alt="图片跑路了">
+                                {% elif item.startswith('face://') %}
+                                    <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
+                                {% elif item.startswith('_file://') %}
+                                    <img src="{{ item[1:] }}" alt="表情" class="face">
+                                {% else %}
+                                    {{ item | replace("__internal_br__", "<br>") | safe }}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
                 {% endfor %}
             </div>
-            <br/>
-        {% endfor %}
-    </div>
-
-    <div>
-        <div style="display: flex; justify-content: right; margin-top: 42px">
-            Powered by Nishikigi
         </div>
-        <div style="display: flex; justify-content: space-between;">
-            <div> {{ date }}</div>
-            <div>中国药科大学校园墙 3644295479</div>
+
+        <div class="footer">
+            <div class="footer-powered">Powered by Nishikigi</div>
+            <div class="footer-meta">
+                <div>{{ date }}</div>
+                <div>中国药科大学表白墙 · 3644295479</div>
+            </div>
         </div>
     </div>
 </div>
