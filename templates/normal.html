@@ -89,15 +89,6 @@
             object-fit: cover;
             box-shadow: 4px 8px 16px rgba(0,0,0,0.25);
         }
-        .user-name {
-            font-size: 46px;
-            font-weight: bold;
-        }
-        .messages {
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-        }
         .message {
             display: inline-block;
             max-width: 100%;
@@ -218,15 +209,15 @@
 
 <body>
 <div class="blur-bg"></div>
-<div class="card-wrapper">
-    <div class="card">
-        <div>
-            <div class="user">
-                <div class="avatar">
-                    <img src="{{ avatar_src }}" alt="头像">
-                </div>
-                <div class="user-name {% if admin %}rainbow{% endif %}">
-                    {{ username }}
+<div class="card">
+    <div>
+        <div class="user">
+            <div class="avatar">
+                <img src="{{ avatar_src }}" alt="头像">
+            </div>
+            <div>
+                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
+                {{ username }}
                 </div>
             </div>
             <div class="messages">
@@ -249,13 +240,9 @@
                 {% endfor %}
             </div>
         </div>
-
-        <div class="footer">
-            <div class="footer-powered">Powered by Nishikigi</div>
-            <div class="footer-meta">
-                <div>{{ date }}</div>
-                <div>中国药科大学表白墙 · 3644295479</div>
-            </div>
+        <div style="display: flex; justify-content: space-between;">
+            <div> {{ date }}</div>
+            <div>中国药科大学表白墙 3644295479</div>
         </div>
     </div>
 </div>
