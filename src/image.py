@@ -164,46 +164,138 @@ def _generate_anonymous_avatar(seed: int, post_id: int) -> str:
     rng = random.Random(hashlib.sha256(str(seed).encode()).digest())
     size = 320
 
-    base_color = tuple(rng.randint(60, 150) for _ in range(3))
-    accent_color = tuple(rng.randint(120, 220) for _ in range(3))
-    highlight_color = tuple(min(255, accent_color[i] + rng.randint(15, 40)) for i in range(3))
+    bg_color = tuple(rng.randint(160, 210) for _ in range(3))
+    accent = tuple(rng.randint(90, 150) for _ in range(3))
+    light = tuple(min(255, c + rng.randint(35, 60)) for c in accent)
+    dark = tuple(max(0, c - rng.randint(25, 45)) for c in accent)
 
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    background = Image.new("RGBA", (size, size), base_color + (235,))
-    canvas.paste(background, (0, 0))
-
+    canvas = Image.new("RGBA", (size, size), bg_color + (255,))
     draw = ImageDraw.Draw(canvas, "RGBA")
-    layer_scales = (0.85, 0.65, 0.45)
-    for index, scale in enumerate(layer_scales):
-        radius = int(size * scale)
-        cx = rng.randint(int(size * 0.25), int(size * 0.75))
-        cy = rng.randint(int(size * 0.25), int(size * 0.75))
-        mix = (index + 1) / (len(layer_scales) + 1)
-        color = tuple(
-            int(base_color[i] * (1 - mix) + highlight_color[i] * mix)
-            for i in range(3)
-        ) + (160,)
-        bbox = (cx - radius, cy - radius, cx + radius, cy + radius)
-        draw.ellipse(bbox, fill=color)
 
-    accent = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    accent_draw = ImageDraw.Draw(accent, "RGBA")
-    for _ in range(3):
-        radius = rng.randint(int(size * 0.15), int(size * 0.35))
-        cx = rng.randint(int(size * 0.2), int(size * 0.8))
-        cy = rng.randint(int(size * 0.2), int(size * 0.8))
-        color = accent_color + (rng.randint(120, 200),)
-        bbox = (cx - radius, cy - radius, cx + radius, cy + radius)
-        accent_draw.ellipse(bbox, fill=color)
-    accent = accent.filter(ImageFilter.GaussianBlur(radius=18))
-    canvas = Image.alpha_composite(canvas, accent)
+    frame_margin = int(size * 0.08)
+    draw.rounded_rectangle(
+        (frame_margin, frame_margin, size - frame_margin, size - frame_margin),
+        radius=int(size * 0.12),
+        outline=light + (180,),
+        width=6,
+        fill=(255, 255, 255, 90),
+    )
 
-    sheen = Image.new("RGBA", (size, size), (255, 255, 255, 0))
-    sheen_draw = ImageDraw.Draw(sheen, "RGBA")
-    sheen_draw.ellipse((size * 0.05, size * 0.05, size * 0.95, size * 0.65), fill=(255, 255, 255, 90))
-    sheen = sheen.rotate(-15, resample=Image.BICUBIC, expand=False)
-    sheen = sheen.filter(ImageFilter.GaussianBlur(radius=14))
-    canvas = Image.alpha_composite(canvas, sheen)
+    head_width = int(size * 0.6)
+    head_height = int(size * 0.52)
+    head_x0 = (size - head_width) // 2
+    head_y0 = int(size * 0.2)
+    head_x1 = head_x0 + head_width
+    head_y1 = head_y0 + head_height
+    draw.rounded_rectangle(
+        (head_x0, head_y0, head_x1, head_y1),
+        radius=int(size * 0.12),
+        fill=accent + (245,),
+        outline=dark + (220,),
+        width=8,
+    )
+
+    visor_margin = int(size * 0.08)
+    visor_height = int(size * 0.22)
+    visor_y0 = head_y0 + visor_margin
+    visor_y1 = visor_y0 + visor_height
+    draw.rounded_rectangle(
+        (head_x0 + visor_margin, visor_y0, head_x1 - visor_margin, visor_y1),
+        radius=int(size * 0.09),
+        fill=(255, 255, 255, 210),
+    )
+
+    eye_radius = int(size * 0.045)
+    eye_y = (visor_y0 + visor_y1) // 2
+    eye_spacing = int(size * 0.16)
+    eye_center = (head_x0 + head_x1) // 2
+    for offset in (-eye_spacing, eye_spacing):
+        draw.ellipse(
+            (
+                eye_center + offset - eye_radius,
+                eye_y - eye_radius,
+                eye_center + offset + eye_radius,
+                eye_y + eye_radius,
+            ),
+            fill=dark + (255,),
+        )
+
+    mouth_width = int(size * 0.28)
+    mouth_height = int(size * 0.08)
+    mouth_x0 = eye_center - mouth_width // 2
+    mouth_y0 = visor_y1 + int(size * 0.06)
+    mouth_x1 = mouth_x0 + mouth_width
+    mouth_y1 = mouth_y0 + mouth_height
+    draw.rounded_rectangle(
+        (mouth_x0, mouth_y0, mouth_x1, mouth_y1),
+        radius=mouth_height // 2,
+        fill=dark + (220,),
+    )
+
+    body_width = int(size * 0.52)
+    body_height = int(size * 0.26)
+    body_x0 = (size - body_width) // 2
+    body_y0 = head_y1 - int(size * 0.04)
+    body_x1 = body_x0 + body_width
+    body_y1 = body_y0 + body_height
+    draw.rounded_rectangle(
+        (body_x0, body_y0, body_x1, body_y1),
+        radius=int(size * 0.1),
+        fill=accent + (235,),
+        outline=dark + (200,),
+        width=6,
+    )
+
+    panel_margin = int(size * 0.06)
+    panel_height = int(size * 0.1)
+    draw.rounded_rectangle(
+        (
+            body_x0 + panel_margin,
+            body_y0 + panel_margin,
+            body_x1 - panel_margin,
+            body_y0 + panel_margin + panel_height,
+        ),
+        radius=int(panel_height * 0.4),
+        fill=(255, 255, 255, 180),
+    )
+
+    antenna_width = int(size * 0.06)
+    antenna_height = int(size * 0.14)
+    antenna_x = (size - antenna_width) // 2
+    draw.rounded_rectangle(
+        (
+            antenna_x,
+            head_y0 - antenna_height,
+            antenna_x + antenna_width,
+            head_y0,
+        ),
+        radius=antenna_width // 2,
+        fill=accent + (235,),
+    )
+    antenna_tip_radius = int(size * 0.05)
+    draw.ellipse(
+        (
+            (size // 2) - antenna_tip_radius,
+            head_y0 - antenna_height - antenna_tip_radius,
+            (size // 2) + antenna_tip_radius,
+            head_y0 - antenna_height + antenna_tip_radius,
+        ),
+        fill=light + (240,),
+    )
+
+    glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow, "RGBA")
+    glow_draw.ellipse(
+        (
+            body_x0 - int(size * 0.08),
+            head_y0 - int(size * 0.12),
+            body_x1 + int(size * 0.08),
+            body_y1 + int(size * 0.18),
+        ),
+        fill=light + (90,),
+    )
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=18))
+    canvas = Image.alpha_composite(canvas, glow)
 
     mask = Image.new("L", (size, size), 0)
     mask_draw = ImageDraw.Draw(mask)
