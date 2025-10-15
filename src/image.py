@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+from typing import Final
 
 from botx.models import User
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -71,40 +72,66 @@ async def generate_img(
     return os.path.abspath(f"./data/{id}/image.png")
 
 
+_HEIGHT_SCRIPT: Final[str] = """
+() => {
+    const doc = document.documentElement;
+    const bod = document.body;
+    const card = document.querySelector('.card');
+    const blur = document.querySelector('.blur-bg');
+    const height = card
+        ? Math.max(card.scrollHeight, card.offsetHeight, card.clientHeight)
+        : Math.max(
+            doc.scrollHeight, doc.offsetHeight, doc.clientHeight,
+            bod.scrollHeight, bod.offsetHeight, bod.clientHeight
+        );
+    if (blur) {
+        const limited = Math.min(height + 120, 1500);
+        blur.style.height = `${limited}px`;
+    }
+    return height;
+}
+"""
+
+
+def _select_scale(height: float) -> int:
+    if height <= 2400:
+        return 3
+    if height <= 4800:
+        return 2
+    return 1
+
+
+async def _prepare_page(browser: playwright.async_api.Browser, id: int, scale: int):
+    page = await browser.new_page(
+        viewport={"width": 720, "height": 720},
+        device_scale_factor=scale,
+    )
+    await page.goto(
+        f"file://{os.path.abspath(f"./data/{id}/page.html")}",
+        wait_until="domcontentloaded",
+        timeout=60_000,
+    )
+    height = await page.evaluate(_HEIGHT_SCRIPT)
+    return page, float(height)
+
+
 async def screenshoot(id: int, output_path: str):
     async with playwright.async_api.async_playwright() as p:
         browser = await p.chromium.launch(headless=True, chromium_sandbox=True)
-        page = await browser.new_page(
-            viewport={"width": 720, "height": 720},
-            device_scale_factor=3,
-        )
-        await page.goto(
-            f"file://{os.path.abspath(f"./data/{id}/page.html")}",
-            wait_until="networkidle",
-        )
 
-        # 在浏览器环境中计算页面实际高度并设置 div
-        h = await page.evaluate(
-            """
-            () => {
-                const doc = document.documentElement;
-                const bod = document.body;
-                const h = Math.max(
-                    doc.scrollHeight, doc.offsetHeight, doc.clientHeight,
-                    bod.scrollHeight, bod.offsetHeight, bod.clientHeight
-                ) - 100;
-                const el = document.querySelector('.blur-bg');
-                if (h <= 1500) {
-                    el.style.height = h + 'px';
-                }
-                return h;
-            }
-        """
-        )
-        print(h)
-        await page.screenshot(
+        # 先以较低缩放加载页面获取高度, 避免超大页面渲染超时
+        temp_page, height = await _prepare_page(browser, id, scale=1)
+        await temp_page.close()
+
+        device_scale = _select_scale(height)
+        page, height = await _prepare_page(browser, id, scale=device_scale)
+
+        viewport_height = max(720, min(int(height) + 120, 4096))
+        await page.set_viewport_size({"width": 720, "height": viewport_height})
+
+        card = page.locator(".card")
+        await card.screenshot(
             type="png",
-            full_page=True,
             path=output_path,
             omit_background=True,
             animations="disabled",
