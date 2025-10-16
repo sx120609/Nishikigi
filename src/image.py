@@ -179,7 +179,7 @@ async def screenshoot(id: int, output_path: str):
     async with playwright.async_api.async_playwright() as p:
         browser = await p.chromium.launch(headless=True, chromium_sandbox=True)
         page = await browser.new_page(
-            viewport={"width": 720, "height": 720}, device_scale_factor=4,
+            viewport={"width": 720, "height": 720}, device_scale_factor=3,
         )
         await page.goto(
             f"file://{_abs_data_path(str(id), 'page.html')}",
