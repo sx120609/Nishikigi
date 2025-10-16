@@ -64,11 +64,11 @@
             border-radius: 24px;
             display: block;
             margin: 8px 0px;
-        }
+       }
         .face {
             height: 240px !important;
             margin: 0px !important;
-        }
+       }
         .cqface {
             vertical-align: middle;
             width: 36px !important;
@@ -85,6 +85,7 @@
             color: transparent;
             text-shadow: 0 2px 20px rgba(0, 114, 255, 0.15);
         }
+
         .blur-bg {
             width: 100%;
             position: absolute;
@@ -94,90 +95,49 @@
             filter: blur(100px);
             z-index: -1;
         }
-        .mac-window {
-            width: 920px;
-            max-width: 96vw;
-            border-radius: 18px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04));
-            border: 1px solid rgba(0,0,0,0.12);
-            box-shadow: 0 18px 60px rgba(0,0,0,.45), 0 4px 18px rgba(0,0,0,.35);
-            overflow: hidden;
-            backdrop-filter: blur(16px) saturate(120%);
-            -webkit-backdrop-filter: blur(16px) saturate(120%);
-        }
-        .titlebar {
-            height: 44px;
-            display: flex;
-            align-items: center;
-            padding: 0 12px;
-            gap: 10px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
-            border-bottom: 1px solid rgba(0,0,0,0.12);
-            user-select: none;
-        }
-        .traffic-lights { display: flex; gap: 8px; }
-        .dot { width: 12px; height: 12px; border-radius: 50%;
-            box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 0 1px 0 rgba(255,255,255,.12); }
-        .dot.red { background: #ff5f57; }
-        .dot.yellow { background: #febc2e; }
-        .dot.green { background: #28c840; }
-        .win-title { flex: 1; text-align: center; font-size: 13px; color: #7f8691; letter-spacing: .2px; }
-        .window-content { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); }
     </style>
 </head>
 
 <body>
 <div class="blur-bg"></div>
-<div class="mac-window">
-    <div class="titlebar">
-        <div class="traffic-lights">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
-        </div>
-        <div class="win-title">中国药科大学表白墙</div>
-        <div style="width:44px"></div>
-    </div>
-    <div class="window-content">
-        <div class="card">
+<div class="card">
+    <div>
+        <div class="user">
+            <div class="avatar">
+                <img src="{{ avatar_src }}" alt="头像">
+            </div>
             <div>
-                <div class="user">
-                    <div class="avatar">
-                        <img src="{{ avatar_src }}" alt="头像">
-                    </div>
-                    <div>
-                        <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
-                        {{ username }}
-                        </div>
-                    </div>
+                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
+                {{ username }}
                 </div>
-                <br/>
-                {% for items in contents %}
-                    <div class="message {% if items[0] == '' %}message_border{% endif %}" >
-                        {% for item in items[1:] %}
-                            {% if item.startswith('file://') %}
-                                <img src="{{ item[7:] }}" alt="图片跑路了">
-                            {% elif item.startswith('face://') %}
-                                <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
-                            {% elif item.startswith('_file://') %}
-                                <img src="{{ item[1:] }}" alt="表情" class="face">
-                            {% else %}
-                                {{ item | replace("__internal_br__", "<br>") | safe }}
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                    <br/>
+            </div>
+        </div>
+        <br/>
+        {% for items in contents %}
+            <div class="message {% if items[0] == '' %}message_border{% endif %}" >
+                {% for item in items[1:] %}
+                    {% if item.startswith('file://') %}
+                        <img src="{{ item[7:] }}" alt="图片跑路了">
+                    {% elif item.startswith('face://') %}
+                        <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
+                    {% elif item.startswith('_file://') %}
+                        <img src="{{ item[1:] }}" alt="表情" class="face">
+                    {% else %}
+                        {{ item | replace("__internal_br__", "<br>") | safe }}
+                    {% endif %}
                 {% endfor %}
             </div>
-            <div>
-                <div style="display: flex; justify-content: right; margin-top: 42px">
-                    Powered by Nishikigi
-                </div>
-                <div style="display: flex; justify-content: space-between;">
-                    <div> {{ date }}</div>
-                    <div>中国药科大学表白墙 3644295479</div>
-                </div>
-            </div>
+            <br/>
+        {% endfor %}
+    </div>
+
+    <div>
+        <div style="display: flex; justify-content: right; margin-top: 42px">
+            Powered by Nishikigi
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <div> {{ date }}</div>
+            <div>中国药科大学表白墙 3644295479</div>
         </div>
     </div>
 </div>
