@@ -1,142 +1,145 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<style>
-  :root{
-    --bg:#f4f6f8;
-    --card:#ffffffee;
-    --shadow: 0 24px 60px rgba(0,0,0,.15), 0 8px 24px rgba(0,0,0,.10);
-    --stroke: rgba(255,255,255,.6);
-    --muted:#7d8696;
-    --bubble:#ffffff;
-    --bubble-shadow: 0 10px 24px rgba(0,0,0,.08);
-    --title-grad: linear-gradient(90deg,#a7b6ff 0%, #e3a8ff 45%, #a7f0ff 100%);
-    --media-bg: linear-gradient(180deg,#0e2a35,#112f3f 60%, #0f2936 100%);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{
-    margin:0; display:grid; place-items:center;
-    background:
-      radial-gradient(800px 600px at 18% 15%, rgba(255,210,255,.45), transparent 60%),
-      radial-gradient(800px 600px at 82% 85%, rgba(180,230,255,.55), transparent 60%),
-      var(--bg);
-    font-family: "SF Pro","PingFang SC","Apple Color Emoji",Arial,sans-serif;
-    letter-spacing:.3px;
-  }
-  .wrap{
-    width:min(820px,96vw);
-    padding:24px 26px;
-    border-radius:28px;
-    background: var(--card);
-    backdrop-filter: blur(18px) saturate(120%);
-    -webkit-backdrop-filter: blur(18px) saturate(120%);
-    box-shadow: var(--shadow);
-    border: 1px solid var(--stroke);
-  }
-  .header{
-    display:flex; align-items:center; gap:16px; margin-bottom:18px;
-  }
-  .avatar img{
-    width:72px; height:72px; border-radius:50%; object-fit:cover;
-    box-shadow: 0 8px 18px rgba(0,0,0,.18);
-  }
-  .title{
-    display:flex; flex-direction:column; line-height:1.1;
-  }
-  .username{
-    font-size:34px; font-weight:800;
-    background: var(--title-grad);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent; color:transparent;
-    letter-spacing:.4px;
-  }
-  .uid{
-    margin-top:6px; font-size:14px; color:var(--muted);
-  }
-  .messages{margin-top:8px}
-  .message{
-    display:inline-block; max-width:100%; margin:10px 0;
-  }
-  .message_border{
-    background: var(--bubble);
-    border-radius:22px;
-    padding:10px 14px;
-    font-size:20px; line-height:1.6;
-    box-shadow: var(--bubble-shadow);
-  }
-  .message img{max-width:100%; border-radius:18px; display:block; margin:8px 0}
-  .cqface{vertical-align:middle; width:28px !important; height:28px !important; transform:translateY(-.15em)}
-  .face{height:200px !important; margin:0 !important}
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: "SF Pro", "PingFang SC", "Apple Color Emoji", Arial, sans-serif;
+            align-items: center;
+            width: 720px;
+            min-height: 720px;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            letter-spacing: 0.5px;
+        }
+        .card {
+            display: flex;
+            flex-direction: column;
+            margin: 40px;
+            padding: 30px;
+            width: 100%;
+            min-height: 480px;
+            justify-content: space-between; 
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            box-shadow: 4px 8px 32px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .user {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .avatar img {
+            width: 100px;
+            height: 100px;
+            margin-right: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+            box-shadow: 4px 8px 16px rgba(0,0,0,0.25);
+        }
+        .message {
+            display: inline-block;
+            max-width: 100%;
+            border-radius: 24px;
+            margin-bottom: 18px;
+            line-height: 1.5;
+            font-size: 32px;
+            word-wrap: break-word;
+        }
+        .message_border {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 4px 8px 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .message img {
+            max-width: 480px;
+            border-radius: 24px;
+            display: block;
+            margin: 8px 0px;
+       }
+        .face {
+            height: 240px !important;
+            margin: 0px !important;
+       }
+        .cqface {
+            vertical-align: middle;
+            width: 36px !important;
+            height: 36px !important;
+            margin: 0 !important;
+            display: inline !important;
+            padding: 0 !important;
+            transform: translateY(-0.1em);
+        }
+        .rainbow {
+            background: linear-gradient(90deg, #fbc2eb, #a6c1ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            text-shadow: 0 2px 20px rgba(0, 114, 255, 0.15);
+        }
 
-  .media{
-    margin-top:16px;
-    background: var(--media-bg);
-    color:#e7f0f4;
-    border-radius:22px;
-    padding:18px;
-    box-shadow: 0 18px 40px rgba(5,35,48,.35);
-    overflow:hidden;
-  }
-  .media .art{width:100%; border-radius:12px; display:block}
-  .media .title{margin-top:16px; font-size:18px; font-weight:700}
-  .media .meta{margin-top:6px; font-size:13px; opacity:.8}
-  .media .controls{margin-top:16px; display:flex; align-items:center; gap:14px}
-  .dot{width:6px; height:6px; border-radius:50%; background:#88a9b5; opacity:.6}
-  .footer{
-    margin-top:18px; display:flex; justify-content:space-between; align-items:center; color:#5a606b; font-size:12px;
-  }
-  .brand{opacity:.9}
-</style>
+        .blur-bg {
+            width: 100%;
+            position: absolute;
+            background: radial-gradient(at 30% 30%, rgba(255, 0, 150, 0.1), transparent 60%),
+                        radial-gradient(at 70% 70%, rgba(0, 200, 255, 0.15), transparent 60%),
+                        radial-gradient(at 50% 50%, rgba(255, 255, 0, 0.15), transparent 60%);
+            filter: blur(100px);
+            z-index: -1;
+        }
+    </style>
 </head>
+
 <body>
-  <div class="wrap">
-    <div class="header">
-      <div class="avatar">
-        <img src="{{ avatar_src }}" alt="头像">
-      </div>
-      <div class="title">
-        <div class="username {% if admin %}rainbow{% endif %}">{{ username }}</div>
-        <div class="uid">{{ uid if uid is defined else '' }}</div>
-      </div>
-    </div>
-
-    <div class="messages">
-      {% for items in contents %}
-        <div class="message {% if items[0] == '' %}message_border{% endif %}">
-          {% for item in items[1:] %}
-            {% if item.startswith('file://') %}
-              <img src="{{ item[7:] }}" alt="">
-            {% elif item.startswith('face://') %}
-              <img src="file://{{ item[7:] }}" alt="" class="cqface">
-            {% elif item.startswith('_file://') %}
-              <img src="{{ item[1:] }}" alt="" class="face">
-            {% else %}
-              {{ item | replace("__internal_br__", "<br>") | safe }}
-            {% endif %}
-          {% endfor %}
+<div class="blur-bg"></div>
+<div class="card">
+    <div>
+        <div class="user">
+            <div class="avatar">
+                <img src="{{ avatar_src }}" alt="头像">
+            </div>
+            <div>
+                <div class="{% if admin %}rainbow{% endif %}" style="font-size: 46px; font-weight: bold;">
+                {{ username }}
+                </div>
+            </div>
         </div>
-      {% endfor %}
+        <br/>
+        {% for items in contents %}
+            <div class="message {% if items[0] == '' %}message_border{% endif %}" >
+                {% for item in items[1:] %}
+                    {% if item.startswith('file://') %}
+                        <img src="{{ item[7:] }}" alt="图片跑路了">
+                    {% elif item.startswith('face://') %}
+                        <img src="file://{{ item[7:] }}" alt="表情" class="cqface">
+                    {% elif item.startswith('_file://') %}
+                        <img src="{{ item[1:] }}" alt="表情" class="face">
+                    {% else %}
+                        {{ item | replace("__internal_br__", "<br>") | safe }}
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <br/>
+        {% endfor %}
+    </div>
 
-      {% if media is defined %}
-      <div class="media">
-        {% if media.cover %}<img class="art" src="{{ media.cover }}" alt="封面">{% endif %}
-        {% if media.title %}<div class="title">{{ media.title }}</div>{% endif %}
-        {% if media.subtitle %}<div class="meta">{{ media.subtitle }}</div>{% endif %}
-        <div class="controls">
-          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    <div>
+        <div style="display: flex; justify-content: right; margin-top: 42px">
+            Powered by Nishikigi
         </div>
-      </div>
-      {% endif %}
+        <div style="display: flex; justify-content: space-between;">
+            <div> {{ date }}</div>
+            <div>中国药科大学表白墙 3644295479</div>
+        </div>
     </div>
-
-    <div class="footer">
-      <div>{{ date }}</div>
-      <div class="brand">
-        <div>Powered by Nishikigi</div>
-        <div>中国药科大学表白墙 3644295479</div>
-      </div>
-    </div>
-  </div>
+</div>
 </body>
 </html>
