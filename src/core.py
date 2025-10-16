@@ -209,7 +209,7 @@ async def article(msg: PrivateMessage):
             "匿名投稿不显示你的昵称和头像\n若无需匿名,  发送:  \n\n#取消\n\n后再重新投稿\nPS: 之前有人匿名发失物招领"
         )
 
-    await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
+    # await bot.send_group(config.GROUP, f"{msg.sender} 开始投稿")
 
 
 @bot.on_cmd("结束", help_msg="用于结束当前投稿")
@@ -315,7 +315,7 @@ async def cancel(msg: PrivateMessage):
     shutil.rmtree(f"./data/{id}")
     await msg.reply("已取消本次投稿🫢")
 
-    await bot.send_group(config.GROUP, f"{msg.sender} 取消了投稿")
+    # await bot.send_group(config.GROUP, f"{msg.sender} 取消了投稿")
 
 
 @bot.on_cmd(
