@@ -199,27 +199,36 @@ async def screenshoot(id: int, output_path: str):
         def pick_dsf(w, h, cap_px=80_000_000):
             return int(max(1, min(4, math.floor(math.sqrt(cap_px / (w * h))))))
         dsf = pick_dsf(W, H)
-        await page.set_viewport_size({"width": W, "height": min(8000, H)})
+        css_limit = 8192
+        chunk_css = min(2000, css_limit // dsf)
+        chunk_css = max(600, chunk_css)
         if dsf != 4:
             await page.close()
             page = await browser.new_page(
-                viewport={"width": W, "height": min(8000, H)},
+                viewport={"width": W, "height": min(chunk_css, H)},
                 device_scale_factor=dsf,
             )
             await page.route("**/*", _route_handler)
             await page.goto(f"file://{_abs_data_path(str(id), 'page.html')}", wait_until="domcontentloaded")
-        MAX_CHUNK = 8000
+        else:
+            await page.set_viewport_size({"width": W, "height": min(chunk_css, H)})
         chunks = []
         y = 0
         while y < H:
-            h_chunk = min(MAX_CHUNK, H - y)
+            h_chunk = min(chunk_css, H - y)
+            await page.evaluate(f"window.scrollTo(0, {y});")
+            await page.wait_for_function("Math.abs(window.scrollY - arg) <= 2", arg=y)
+            await page.wait_for_timeout(30)
             buf = await page.screenshot(
                 type="png",
-                clip={"x": 0, "y": y, "width": W, "height": h_chunk},
+                full_page=False,
                 omit_background=True,
                 animations="disabled",
             )
-            chunks.append(Image.open(io.BytesIO(buf)))
+            img = Image.open(io.BytesIO(buf))
+            if img.height != h_chunk:
+                img = img.crop((0, 0, img.width, h_chunk))
+            chunks.append(img)
             y += h_chunk
         await page.close()
         total_h = sum(im.height for im in chunks)
