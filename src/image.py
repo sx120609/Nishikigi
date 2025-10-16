@@ -11,7 +11,18 @@ from PIL import Image, ImageDraw, ImageFilter
 import playwright.async_api
 import qrcode
 
+# -----------------------
+# 路径工具
+# -----------------------
+def _abs_data_path(*parts: str) -> str:
+    return os.path.abspath(os.path.join(".", "data", *parts))
 
+def _abs_face_path(name: str) -> str:
+    return os.path.abspath(os.path.join(".", "face", name))
+
+# -----------------------
+# 核心：生成图片（含窗口化渲染）
+# -----------------------
 async def generate_img(
     id: int,
     user: User | None,
@@ -19,52 +30,43 @@ async def generate_img(
     admin: bool = False,
     avatar_seed: int | None = None,
 ) -> str:
+    # 确保目录存在
+    os.makedirs(_abs_data_path(str(id)), exist_ok=True)
+
     env = Environment(
         loader=FileSystemLoader("templates"),
         trim_blocks=True,
         lstrip_blocks=True,
-        autoescape=select_autoescape(
-            [
-                "html",
-            ]
-        ),
+        autoescape=select_autoescape(["html"]),
     )
     _contents = []
     for items in contents:
-        values = [
-            "__no_border__" if (len(items) == 1 and items[0]["type"] == "image") else ""
-        ]
+        values = ["__no_border__" if (len(items) == 1 and items[0]["type"] == "image") else ""]
         for d in items:
-            match (d["type"]):
-                case "image":
-                    if d["data"]["sub_type"] == 1:
-                        # 表情包
-                        values.append(
-                            "_file://"
-                            + os.path.abspath(f"./data/{id}/{d["data"]["file"]}")
-                        )
-                    else:
-                        values.append(
-                            "file://"
-                            + os.path.abspath(f"./data/{id}/{d["data"]["file"]}")
-                        )
-                case "text":
-                    values.append(
-                        d["data"]["text"]
-                        .replace("\r\n", "\n")
-                        .replace("\n", "__internal_br__")
-                    )
-                case "face":
-                    values.append(
-                        "face://" + os.path.abspath(f"./face/{d["data"]["id"]}.png")
-                    )
+            t = d["type"]
+            if t == "image":
+                abs_img = _abs_data_path(str(id), d["data"]["file"])
+                if d["data"]["sub_type"] == 1:
+                    # 表情包
+                    values.append("_file://" + abs_img)
+                else:
+                    values.append("file://" + abs_img)
+            elif t == "text":
+                values.append(
+                    d["data"]["text"]
+                    .replace("\r\n", "\n")
+                    .replace("\n", "__internal_br__")
+                )
+            elif t == "face":
+                values.append("face://" + _abs_face_path(f'{d["data"]["id"]}.png'))
         _contents.append(values)
-    # if user != None:
+
+    # if user is not None:
     #     url = f"https://3lu.cn/qq.php?qq={user.user_id}"
     #     qr = qrcode.QRCode(border=0)
     #     qr.add_data(url)
     #     img = qr.make_image(back_color="#f0f0f0")
-    #     img.save(f"./data/{id}/qrcode.png")  # type: ignore
+    #     img.save(_abs_data_path(str(id), "qrcode.png"))  # type: ignore
 
     avatar_path: str | None = None
     avatar_src = _AVATAR_PLACEHOLDER
@@ -86,19 +88,21 @@ async def generate_img(
     output = env.get_template("normal.html" if user else "anonymous.html").render(
         contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        username=None if user == None else user.nickname,
-        # qrcode=os.path.abspath(f"./data/{id}/qrcode.png") if user else None,
+        username=None if user is None else user.nickname,
+        # qrcode=_abs_data_path(str(id), "qrcode.png") if user else None,
         admin=admin,
         avatar_src=avatar_src,
     )
-    with open(f"./data/{id}/page.html", mode="w") as f:
+    with open(_abs_data_path(str(id), "page.html"), mode="w", encoding="utf-8") as f:
         f.write(output)
+
+    out_path = _abs_data_path(str(id), "image.png")
     try:
-        await screenshoot(id=id, output_path=f"./data/{id}/image.png")
+        await screenshoot(id=id, output_path=out_path)
     finally:
         if avatar_path and os.path.exists(avatar_path):
             os.remove(avatar_path)
-    return os.path.abspath(f"./data/{id}/image.png")
+    return out_path
 
 
 _HEIGHT_SCRIPT: Final[str] = """
@@ -116,50 +120,151 @@ _HEIGHT_SCRIPT: Final[str] = """
 }
 """
 
-
+# -----------------------
+# Playwright 页面准备
+# -----------------------
 async def _prepare_page(browser: playwright.async_api.Browser, id: int, scale: int):
     page = await browser.new_page(
         viewport={"width": 720, "height": 720},
         device_scale_factor=scale,
     )
     await page.goto(
-        f"file://{os.path.abspath(f"./data/{id}/page.html")}",
+        f'file://{_abs_data_path(str(id), "page.html")}',
         wait_until="domcontentloaded",
         timeout=60_000,
     )
     height = await page.evaluate(_HEIGHT_SCRIPT)
     return page, float(height)
 
+# -----------------------
+# 分块截图 + 拼接
+# -----------------------
+async def _screenshot_windowed_card(page, output_path: str, dpr: int = 3, chunk_h: int = 2000):
+    """对 .card 进行窗口化分块截图并拼接，突破单次截图高度限制。"""
+    card = page.locator(".card")
+    if await card.count() == 0:
+        # 兜底：全页窗口化
+        await _screenshot_windowed_fullpage(page, output_path, dpr=dpr, chunk_h=chunk_h)
+        return
 
+    # 获取 .card 的位置与尺寸（CSS px）
+    box = await card.bounding_box()
+    if not box:
+        # 无法拿到 bbox 时兜底
+        await page.screenshot(type="png", path=output_path, omit_background=True, animations="disabled", full_page=True)
+        return
+
+    x, y, w, h = box["x"], box["y"], box["width"], box["height"]
+
+    # 逐块截取
+    slices = []
+    current_top = 0
+    while current_top < h:
+        this_h = min(chunk_h, h - current_top)
+        clip = {
+            "x": x,
+            "y": y + current_top,
+            "width": w,
+            "height": this_h,
+        }
+        buf = await page.screenshot(type="png", clip=clip, omit_background=True, animations="disabled")
+        slices.append(buf)
+        current_top += this_h
+
+    # 拼接（按 DPR 放大后的像素）
+    imgs = [Image.open(io := __import__("io").BytesIO(b)).convert("RGBA") for b in slices]
+    # Playwright 返回的是以 CSS 像素为单位的渲染像素（已乘以 DPR）。无需再倍增。
+    total_h = sum(im.height for im in imgs)
+    total_w = max(im.width for im in imgs)
+    canvas = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
+    offset = 0
+    for im in imgs:
+        canvas.paste(im, (0, offset))
+        offset += im.height
+    canvas.save(output_path, format="PNG")
+
+async def _screenshot_windowed_fullpage(page, output_path: str, dpr: int = 3, chunk_h: int = 2000):
+    """全页窗口化分块截图并拼接（当 .card 不存在时使用）。"""
+    total_h = await page.evaluate(_HEIGHT_SCRIPT)
+    # 逐块按页面坐标截图
+    slices = []
+    taken = 0
+    while taken < total_h:
+        this_h = int(min(chunk_h, total_h - taken))
+        clip = {"x": 0, "y": taken, "width": 720, "height": this_h}
+        buf = await page.screenshot(type="png", clip=clip, omit_background=True, animations="disabled")
+        slices.append(buf)
+        taken += this_h
+
+    imgs = [Image.open(io := __import__("io").BytesIO(b)).convert("RGBA") for b in slices]
+    total_h_px = sum(im.height for im in imgs)
+    total_w_px = max(im.width for im in imgs)
+    canvas = Image.new("RGBA", (total_w_px, total_h_px), (0, 0, 0, 0))
+    y = 0
+    for im in imgs:
+        canvas.paste(im, (0, y))
+        y += im.height
+    canvas.save(output_path, format="PNG")
+
+# -----------------------
+# 截图入口：先试普通法，超长则走窗口化
+# -----------------------
 async def screenshoot(id: int, output_path: str):
     async with playwright.async_api.async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, chromium_sandbox=True)
+        # 更稳妥的启动参数（容器内不启用 sandbox）
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
 
-        # 先以较低缩放加载页面获取高度, 避免超大页面渲染超时
+        # 先低缩放测高，再高缩放渲染
         temp_page, height = await _prepare_page(browser, id, scale=1)
         await temp_page.close()
 
         page, height = await _prepare_page(browser, id, scale=3)
 
+        # 普通截图路径（尝试一次）
         viewport_height = max(720, min(int(height) + 120, 4096))
         await page.set_viewport_size({"width": 720, "height": viewport_height})
 
         card = page.locator(".card")
-        await card.screenshot(
-            type="png",
-            path=output_path,
-            omit_background=True,
-            animations="disabled",
-        )
-        await page.close()
-        await browser.close()
-
+        try:
+            if await card.count() == 0:
+                # 没有 .card：全页
+                if viewport_height >= 4096:
+                    # 太高，直接走窗口化
+                    await _screenshot_windowed_fullpage(page, output_path, dpr=3, chunk_h=2000)
+                else:
+                    await page.screenshot(
+                        type="png",
+                        path=output_path,
+                        omit_background=True,
+                        animations="disabled",
+                        full_page=True,
+                    )
+            else:
+                # 有 .card：先尝试一次性截
+                if viewport_height >= 4096:
+                    # 超限走窗口化
+                    await _screenshot_windowed_card(page, output_path, dpr=3, chunk_h=2000)
+                else:
+                    await card.screenshot(
+                        type="png",
+                        path=output_path,
+                        omit_background=True,
+                        animations="disabled",
+                    )
+        finally:
+            await page.close()
+            await browser.close()
 
 _AVATAR_PLACEHOLDER: Final[str] = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="
 )
 
-
+# -----------------------
+# 匿名头像生成
+# -----------------------
 def _generate_anonymous_avatar(seed: int, post_id: int) -> str:
     rng = random.Random(hashlib.sha256(str(seed).encode()).digest())
     size = 320
@@ -304,24 +409,22 @@ def _generate_anonymous_avatar(seed: int, post_id: int) -> str:
     avatar = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     avatar.paste(canvas, (0, 0), mask)
 
-    avatar_path = os.path.abspath(f"./data/{post_id}/anon_avatar.png")
+    avatar_path = _abs_data_path(str(post_id), "anon_avatar.png")
     avatar.save(avatar_path, format="PNG")
     return avatar_path
 
-
+# -----------------------
+# 头像下载
+# -----------------------
 async def _download_avatar(user_id: int, post_id: int) -> str | None:
-    avatar_path = os.path.abspath(f"./data/{post_id}/avatar.png")
+    avatar_path = _abs_data_path(str(post_id), "avatar.png")
     url = f"https://q1.qlogo.cn/g?b=qq&nk={user_id}&s=640"
     process = await asyncio.create_subprocess_exec(
         "curl",
         "-fsSL",
-        "--connect-timeout",
-        "10",
-        "--max-time",
-        "20",
-        url,
-        "-o",
-        avatar_path,
+        "--connect-timeout", "10",
+        "--max-time", "20",
+        url, "-o", avatar_path,
     )
     return_code = await process.wait()
     if return_code != 0 or not os.path.exists(avatar_path) or os.path.getsize(avatar_path) == 0:
@@ -330,18 +433,16 @@ async def _download_avatar(user_id: int, post_id: int) -> str | None:
         return None
     return avatar_path
 
-
+# -----------------------
+# 模板友好的相对路径
+# -----------------------
 def _avatar_src_for_template(path: str, post_id: int) -> str:
-    """Return a template-friendly relative src for an avatar stored on disk."""
-
-    data_dir = os.path.abspath(f"./data/{post_id}")
+    data_dir = _abs_data_path(str(post_id))
     abs_path = os.path.abspath(path)
     try:
         relative = os.path.relpath(abs_path, data_dir)
     except ValueError:
-        # On different drives (Windows) fall back to basename.
         relative = os.path.basename(abs_path)
     if not relative.startswith("."):
-        # Ensure browsers resolve from the current directory.
         relative = f"./{relative}"
     return relative
