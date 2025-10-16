@@ -10,9 +10,6 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from PIL import Image, ImageDraw, ImageFilter
 import playwright.async_api
 
-# =========================
-# 常量与路径工具
-# =========================
 _AVATAR_PLACEHOLDER: Final[str] = (
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="
 )
@@ -20,9 +17,6 @@ _AVATAR_PLACEHOLDER: Final[str] = (
 def _abs_data_path(*parts: str) -> str:
     return os.path.abspath(os.path.join(".", "data", *parts))
 
-# =========================
-# 头像相关功能
-# =========================
 async def _download_avatar(user_id: int, post_id: int) -> str | None:
     """从 QQ 头像接口下载用户头像"""
     avatar_path = _abs_data_path(str(post_id), "avatar.png")
@@ -54,7 +48,6 @@ def _generate_anonymous_avatar(seed: int, post_id: int) -> str:
     canvas = Image.new("RGBA", (size, size), bg_color + (255,))
     draw = ImageDraw.Draw(canvas, "RGBA")
 
-    # 头部
     head_width = int(size * 0.6)
     head_height = int(size * 0.52)
     head_x0 = (size - head_width) // 2
@@ -69,7 +62,6 @@ def _generate_anonymous_avatar(seed: int, post_id: int) -> str:
         width=8,
     )
 
-    # 眼睛
     eye_radius = int(size * 0.045)
     eye_y = int(size * 0.35)
     eye_spacing = int(size * 0.16)
@@ -85,7 +77,6 @@ def _generate_anonymous_avatar(seed: int, post_id: int) -> str:
             fill=dark + (255,),
         )
 
-    # 光晕
     glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     glow_draw = ImageDraw.Draw(glow, "RGBA")
     glow_draw.ellipse(
@@ -111,9 +102,7 @@ def _avatar_src_for_template(path: str, post_id: int) -> str:
         relative = f"./{relative}"
     return relative
 
-# =========================
-# 核心：生成图片（头像功能保留）
-# =========================
+
 async def generate_img(
     id: int, user: User | None, contents: list, admin: bool = False, avatar_seed: int | None = None
 ) -> str:
@@ -126,7 +115,7 @@ async def generate_img(
         autoescape=select_autoescape(["html"]),
     )
 
-    # 渲染内容（与原始代码一致）
+
     _contents = []
     for items in contents:
         values = [
@@ -151,7 +140,7 @@ async def generate_img(
                     )
         _contents.append(values)
 
-    # 头像处理逻辑
+
     avatar_src = _AVATAR_PLACEHOLDER
     avatar_path: str | None = None
     if user is not None:
@@ -169,7 +158,6 @@ async def generate_img(
         if avatar_path:
             avatar_src = _avatar_src_for_template(avatar_path, id)
 
-    # 模板渲染
     output = env.get_template("normal.html" if user else "anonymous.html").render(
         contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -187,14 +175,11 @@ async def generate_img(
         os.remove(avatar_path)
     return _abs_data_path(str(id), "image.png")
 
-# =========================
-# 截图
-# =========================
 async def screenshoot(id: int, output_path: str):
     async with playwright.async_api.async_playwright() as p:
         browser = await p.chromium.launch(headless=True, chromium_sandbox=True)
         page = await browser.new_page(
-            viewport={"width": 720, "height": 720},
+            viewport={"width": 720, "height": 720}, device_scale_factor=4,
             device_scale_factor=3,
         )
         await page.goto(
