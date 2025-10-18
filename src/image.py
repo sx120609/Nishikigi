@@ -9,7 +9,7 @@ import playwright.async_api
 
 
 async def generate_img(
-    id: int, user: User | None, contents: list, admin: bool = False
+    id: int, user: User, anonymous: bool, contents: list, admin: bool = False
 ) -> str:
     env = Environment(
         loader=FileSystemLoader("templates"),
@@ -61,12 +61,12 @@ async def generate_img(
     output = env.get_template("normal.html").render(
         contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        username=None if user == None else user.nickname,
-        user_id=None if user == None else user.user_id,
+        username=user.nickname,
+        user_id=user.user_id,
         # qrcode=os.path.abspath(f"./data/{id}/qrcode.png") if user else None,
         admin=admin,
-        name=config.NAME,
-        anonymous=user is None,
+        id=id,
+        anonymous=anonymous,
     )
     with open(f"./data/{id}/page.html", mode="w") as f:
         f.write(output)

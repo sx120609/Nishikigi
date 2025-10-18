@@ -6,7 +6,7 @@ from typing import Sequence
 
 
 import config
-from models import Article, Session
+from models import Article, Session, Status
 import image
 import random
 import traceback
@@ -125,7 +125,8 @@ async def article(msg: PrivateMessage):
     parts = raw.split(" ")
     id = Article.create(
         sender_id=msg.sender.user_id,
-        sender_name=None if anonymous else msg.sender.nickname,
+        sender_name=msg.sender.nickname,
+        anonymous=anonymous,
         time=time.time(),
         single="单发" in parts,
     ).id
@@ -195,9 +196,10 @@ async def end(msg: PrivateMessage):
 
     path = await image.generate_img(
         ses.id,
-        user=None if ses.anonymous else msg.sender,
+        user=msg.sender,
         contents=ses.contents,
         admin=any(map(lambda v: v["user_id"] == msg.sender.user_id, vips)),
+        anonymous=ses.anonymous,
     )
 
     await msg.reply(
@@ -216,9 +218,11 @@ async def done(msg: PrivateMessage):
         await msg.reply("请先发送:  \n\n#结束\n\n来查看效果图🤔")
         return
     sessions.pop(msg.sender)
-    Article.update({"tid": "wait"}).where(Article.id == session.id).execute()
+    Article.update({"status": Status.CONFRIMED}).where(
+        Article.id == session.id
+    ).execute()
     article = Article.get_by_id(session.id)
-    anon_text = "匿名" if article.sender_name is None else ""
+    anon_text = "匿名" if article.anonymous else ""
     single_text = ", 要求单发" if article.single else ""
     image_url = get_file_url(f"./data/{session.id}/image.png")
     await bot.send_group(
@@ -232,7 +236,7 @@ async def done(msg: PrivateMessage):
         "set_diy_online_status",
         {
             "face_id": random.choice(config.STATUS_ID),
-            "wording": f"已接 {len(Article.select())} 单",
+            "wording": f"已发 {len(Article.select().where(Article.status == Status.PUBLISHED))} 单",
         },
     )
 
@@ -338,7 +342,9 @@ async def accept(msg: GroupMessage):
         ids = parts[1:]
         flag = False  # 只有有投稿加入队列时才判断是否推送
         for id in ids:
-            article = Article.get_or_none((Article.id == id) & (Article.tid == "wait"))
+            article = Article.get_or_none(
+                (Article.id == id) & (Article.status == Status.CONFRIMED)
+            )
             if not article:
                 await msg.reply(f"投稿 #{id} 不存在或已通过审核")
                 continue
@@ -353,12 +359,14 @@ async def accept(msg: GroupMessage):
                     f"您的投稿 {article} 已通过审核, 正在队列中等待发送",
                 )
             flag = True
-            Article.update({Article.tid: "queue"}).where(Article.id == id).execute()
+            Article.update({Article.status: Status.QUEUE}).where(
+                Article.id == id
+            ).execute()
 
         if flag:
             articles = (
                 Article.select()
-                .where(Article.tid == "queue")
+                .where(Article.status == Status.QUEUE)
                 .order_by(Article.id.asc())
                 .limit(config.QUEUE)
             )
@@ -390,12 +398,14 @@ async def refuse(msg: GroupMessage):
 
         id = parts[1]
         reason = parts[2:]
-        article = Article.get_or_none((Article.id == id) & (Article.tid == "wait"))
+        article = Article.get_or_none(
+            (Article.id == id) & (Article.status == Status.CONFRIMED)
+        )
         if article == None:
             await msg.reply(f"投稿 #{id} 不存在或已通过审核")
             return
 
-        Article.update({"tid": "refused"}).where(Article.id == id).execute()
+        Article.update({"status": Status.REJECTED}).where(Article.id == id).execute()
         await bot.send_private(
             article.sender_id,
             f"抱歉, 你的投稿 #{id} 已被管理员驳回😵‍💫 理由: {' '.join(reason)}",
@@ -419,7 +429,9 @@ async def push(msg: GroupMessage):
 
         ids = parts[1:]
         for id in ids:
-            article = Article.get_or_none((Article.id == id) & (Article.tid == "queue"))
+            article = Article.get_or_none(
+                (Article.id == id) & (Article.status == Status.QUEUE)
+            )
             if not article:
                 await msg.reply(f"投稿 #{id} 不存在或已被推送或未通过审核")
                 return
@@ -445,15 +457,21 @@ async def view(msg: GroupMessage):
             await msg.reply(f"投稿 #{id} 不存在")
             return
 
-        status = article.tid
-        if article.tid == "wait":
-            status = "待审核"
-        elif article.tid == "queue":
-            status = "待发送"
-        elif article.tid == "refused":
-            status = "已驳回"
+        match article.status:
+            case Status.CREATED:
+                status = "投稿中"
+            case Status.CONFRIMED:
+                status = "待审核"
+            case Status.QUEUE:
+                status = "待推送"
+            case Status.REJECTED:
+                status = "已驳回"
+            case Status.PUBLISHED:
+                status = "已推送"
+            case _:
+                status = "未知状态"
 
-        anon_text = "匿名" if article.sender_name is None else ""
+        anon_text = "匿名" if article.anonymous else ""
         single_text = ", 要求单发" if article.single else ""
         image_url = get_file_url(f"./data/{id}/image.png")
 
@@ -466,10 +484,10 @@ async def view(msg: GroupMessage):
 
 @bot.on_cmd("状态", help_msg="查看队列状态", targets=[config.GROUP])
 async def status(msg: GroupMessage):
-    waiting = Article.select().where(Article.tid == "wait")
-    queue = Article.select().where(Article.tid == "queue")
+    confirmed = Article.select().where(Article.status == Status.CONFRIMED)
+    queue = Article.select().where(Article.status == Status.QUEUE)
     await msg.reply(
-        f"Nishikigi 已运行 {int(time.time() - start_time)}s\n待审核: {utils.to_list(waiting)}\n待推送: {utils.to_list(queue)}"
+        f"Nishikigi 已运行 {int(time.time() - start_time)}s\n待审核: {utils.to_list(confirmed)}\n待推送: {utils.to_list(queue)}"
     )
 
 
@@ -509,16 +527,24 @@ async def reply(msg: GroupMessage):
 
 async def publish(ids: Sequence[int | str]) -> str:
     qzone = await bot.get_qzone()
+    text = ""
     images = []
     for id in ids:
+        a = Article.get_by_id(id)
+        text += (
+            f"#{id}"
+            + (f" " if a.anonymous else f" @{{uin:{a.sender_id},nick:null}}")
+            + "\n"
+        )
         images.append(
             await qzone.upload_image(utils.read_image(f"./data/{id}/image.png"))
         )
-
-    tid = await qzone.publish("", images=images)
+    tid = await qzone.publish(text, images=images)
 
     for id in ids:
-        Article.update({"tid": tid}).where(Article.id == id).execute()
+        Article.update({"tid": tid, "status": Status.PUBLISHED}).where(
+            Article.id == id
+        ).execute()
         await bot.send_private(
             Article.get_by_id(id).sender_id, f"您的投稿 #{id} 已被推送😋"
         )
@@ -526,14 +552,14 @@ async def publish(ids: Sequence[int | str]) -> str:
 
 
 async def update_name():
-    waiting = Article.select().where(Article.tid == "wait")
-    queue = Article.select().where(Article.tid == "queue")
+    confirmed = Article.select().where(Article.status == Status.CONFRIMED)
+    queue = Article.select().where(Article.status == Status.QUEUE)
     await bot.call_api(
         "set_group_card",
         {
             "group_id": config.GROUP,
             "user_id": bot.me.user_id,
-            "card": f"待审核: {utils.to_list(waiting)}\n待推送: {utils.to_list(queue)}",
+            "card": f"待审核: {utils.to_list(confirmed)}\n待推送: {utils.to_list(queue)}",
         },
     )
 
@@ -549,7 +575,7 @@ async def clear():
                 continue
             time_passed = time.time() - a.time.timestamp()
 
-            if time_passed > 60 * 60 * 2:
+            if time_passed > 60 * 60:
                 to_remove.append(sess)
                 Article.delete_by_id(a.id)
                 if os.path.exists(f"./data/{a.id}"):
@@ -579,7 +605,9 @@ async def delete(msg: GroupMessage):
 
         ids = parts[1:]
         for id in ids:
-            article = Article.get_or_none((Article.id == id) & (Article.tid == "queue"))
+            article = Article.get_or_none(
+                (Article.id == id) & (Article.status == Status.CONFRIMED)
+            )
             if not article:
                 await msg.reply(f"投稿 #{id} 不在队列中")
                 return
