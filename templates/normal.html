@@ -12,10 +12,13 @@
             display: flex;
             justify-content: center;
             letter-spacing: 0.5px;
+            background: radial-gradient(at 70% 70%, rgba(255, 0, 150, 0.1), transparent 60%),
+                        radial-gradient(at 30% 30%, rgba(0, 200, 255, 0.15), transparent 60%),
+                        radial-gradient(at 50% 50%, rgba(255, 255, 0, 0.15), transparent 60%);
         }
         .card {
-            display: flex;
             flex-direction: column;
+            display: flex;
             margin: 40px;
             padding: 30px;
             width: 100%;
@@ -60,10 +63,11 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
         .message img {
-            max-width: 480px;
+            max-width: 360px;
             border-radius: 24px;
             display: block;
             margin: 8px 0px;
+            box-shadow: 4px 8px 20px rgba(0, 0, 0, 0.2);
        }
         .face {
             height: 240px !important;
@@ -89,20 +93,25 @@
         .blur-bg {
             width: 100%;
             position: absolute;
-            background: radial-gradient(at 30% 30%, rgba(255, 0, 150, 0.1), transparent 60%),
-                        radial-gradient(at 70% 70%, rgba(0, 200, 255, 0.15), transparent 60%),
-                        radial-gradient(at 50% 50%, rgba(255, 255, 0, 0.15), transparent 60%);
-            filter: blur(100px);
             z-index: -1;
         }
     </style>
 </head>
 
 <body>
-<div class="blur-bg"></div>
 <div class="card">
     <div>
         <div class="user">
+            {% if anonymous %}
+             <div class="avatar">
+                <img src="https://q1.qlogo.cn/g?b=qq&nk=10000&s=100" alt="头像">
+            </div>
+            <div >
+                <div style="font-size: 48px; font-weight: bold;">
+                匿名用户
+                </div>
+            </div>
+            {% else %}
             <div class="avatar">
                 <img src="https://q1.qlogo.cn/g?b=qq&nk={{ user_id }}&s=100" alt="头像">
             </div>
@@ -114,6 +123,7 @@
                 {{ user_id }}
                 </div>
             </div>
+            {% endif %}
         </div>
         <br/>
         {% for items in contents %}
@@ -126,7 +136,7 @@
                     {% elif item.startswith('_file://') %}
                         <img src="{{ item[1:] }}" alt="表情" class="face">
                     {% else %}
-                        {{ item | replace("__internal_br__", "<br>") | safe }}
+                        {{ item | e | replace("__internal_br__", "<br>") | safe }}
                     {% endif %}
                 {% endfor %}
             </div>
@@ -135,11 +145,12 @@
     </div>
 
     <div>
-        <div style="display: flex; justify-content: right; margin-top: 42px">
-            Powered by Nishikigi
+        <div style="display: flex; justify-content: space-between; margin-top: 42px">
+            <div></div>
+            <div>Powered by Nishikigi</div>
         </div>
         <div style="display: flex; justify-content: space-between;">
-            <div> {{ date }}</div>
+        <div> {{ date }}</div>
             <div>由 筑梦云间·网站社 开发</div>
         </div>
     </div>

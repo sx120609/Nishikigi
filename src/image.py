@@ -1,10 +1,11 @@
 from datetime import datetime
 import os
 
+import config
+
 from botx.models import User
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import playwright.async_api
-import qrcode
 
 
 async def generate_img(
@@ -57,13 +58,15 @@ async def generate_img(
     #     img = qr.make_image(back_color="#f0f0f0")
     #     img.save(f"./data/{id}/qrcode.png")  # type: ignore
 
-    output = env.get_template("normal.html" if user else "anonymous.html").render(
+    output = env.get_template("normal.html").render(
         contents=_contents,
         date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         username=None if user == None else user.nickname,
         user_id=None if user == None else user.user_id,
         # qrcode=os.path.abspath(f"./data/{id}/qrcode.png") if user else None,
         admin=admin,
+        name=config.NAME,
+        anonymous=user is None,
     )
     with open(f"./data/{id}/page.html", mode="w") as f:
         f.write(output)
@@ -82,31 +85,10 @@ async def screenshoot(id: int, output_path: str):
             f"file://{os.path.abspath(f"./data/{id}/page.html")}",
             wait_until="networkidle",
         )
-
-        # 在浏览器环境中计算页面实际高度并设置 div
-        h = await page.evaluate(
-            """
-            () => {
-                const doc = document.documentElement;
-                const bod = document.body;
-                const h = Math.max(
-                    doc.scrollHeight, doc.offsetHeight, doc.clientHeight,
-                    bod.scrollHeight, bod.offsetHeight, bod.clientHeight
-                ) - 100;
-                const el = document.querySelector('.blur-bg');
-                if (h <= 1500) {
-                    el.style.height = h + 'px';
-                }
-                return h;
-            }
-        """
-        )
-        print(h)
         await page.screenshot(
             type="png",
             full_page=True,
             path=output_path,
-            omit_background=True,
             animations="disabled",
         )
         await browser.close()

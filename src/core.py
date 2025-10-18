@@ -1,34 +1,26 @@
 import asyncio
-from datetime import datetime, time, date
 import os
 import shutil
 import time
 from typing import Sequence
-from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from uvicorn import Config, Server
+
 import config
 from models import Article, Session
 import image
 import random
 import traceback
 import utils
-
-import config
 import agent
 
-from peewee import Model, IntegerField, DateField, SqliteDatabase
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from uvicorn import Config, Server
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-
 from botx import Bot
 from botx.models import PrivateMessage, GroupMessage, User, PrivateRecall, FriendAdd
 import httpx
-
-import json
-import hashlib
 
 bot = Bot(
     ws_uri=config.WS_URL, token=config.ACCESS_TOKEN, log_level="DEBUG", msg_cd=0.5
@@ -53,29 +45,7 @@ def get_image(p: str, t: str):
     return FileResponse(path=p)
 
 
-# 创建投稿数据表
-count_db = SqliteDatabase("./data/submission_count.db")
-
-
-class SubmissionCount(Model):
-    user_id = IntegerField()
-    date = DateField()
-    normal_count = IntegerField(default=0)
-    anonymous_count = IntegerField(default=0)
-
-    class Meta:
-        database = count_db
-        table_name = "submission_count"
-
-
-count_db.connect()
-count_db.create_tables([SubmissionCount], safe=True)
-
-
 sessions: dict[User, Session] = {}
-submission_counts: dict[int, int] = {}
-last_reset_date: str = datetime.now().strftime("%Y-%m-%d")
-anon_reset_flags: dict[int, datetime] = {}
 
 start_time = time.time()
 
@@ -103,24 +73,6 @@ async def error(context: dict, data: dict):
             config.GROUP,
             f"出错了:\n{tb}",
         )
-
-
-async def check_submission_limit(user_id: int, anonymous: bool) -> str | None:
-    today = datetime.now().date()
-
-    # 查询当天计数
-    record = SubmissionCount.get_or_none(
-        (SubmissionCount.user_id == user_id) & (SubmissionCount.date == today)
-    )
-    normal_count = record.normal_count if record else 0
-    anon_count = record.anonymous_count if record else 0
-
-    if anonymous and anon_count >= 1:
-        return "❌ 匿名投稿一天只能投稿一次, 请明天再投稿"
-    if normal_count >= 3:
-        return "❌ 你今天的投稿次数已达三次, 请明天再投稿"
-
-    return None
 
 
 @bot.on_cmd(
@@ -164,12 +116,7 @@ async def article(msg: PrivateMessage):
         )
         return
 
-    # 检查投稿限制
     anonymous = "匿名" in raw
-    limit_msg = await check_submission_limit(msg.sender.user_id, anonymous)
-    if limit_msg:
-        await msg.reply(limit_msg)
-        return
 
     if msg.sender in sessions:
         await msg.reply("你还有投稿未结束🤔\n请先输入 #结束 来结束当前投稿")
@@ -178,8 +125,8 @@ async def article(msg: PrivateMessage):
     parts = raw.split(" ")
     id = Article.create(
         sender_id=msg.sender.user_id,
-        sender_name=None if "匿名" in parts else msg.sender.nickname,
-        time=datetime.now(),
+        sender_name=None if anonymous else msg.sender.nickname,
+        time=time.time(),
         single="单发" in parts,
     ).id
 
@@ -204,7 +151,7 @@ async def article(msg: PrivateMessage):
         await msg.reply(
             "单发大概率被驳回! \n都单发的话, 大家的空间就会被挤满😵‍💫\n节约你我时间, 无需单发, 发送:  \n\n#取消\n\n后再重新投稿"
         )
-    if "匿名" in parts:
+    if anonymous:
         await msg.reply(
             "匿名投稿不显示你的昵称和头像\n若无需匿名,  发送:  \n\n#取消\n\n后再重新投稿\nPS: 之前有人匿名发失物招领"
         )
@@ -278,16 +225,6 @@ async def done(msg: PrivateMessage):
         config.GROUP,
         f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]",
     )
-
-    today = date.today()
-    record, created = SubmissionCount.get_or_create(
-        user_id=msg.sender.user_id, date=today
-    )
-    if session.anonymous:
-        record.anonymous_count += 1
-    else:
-        record.normal_count += 1
-    record.save()
 
     await msg.reply("已成功投稿, 请耐心等待管理员审核😘")
 
@@ -531,7 +468,6 @@ async def view(msg: GroupMessage):
 async def status(msg: GroupMessage):
     waiting = Article.select().where(Article.tid == "wait")
     queue = Article.select().where(Article.tid == "queue")
-    await update_name()
     await msg.reply(
         f"Nishikigi 已运行 {int(time.time() - start_time)}s\n待审核: {utils.to_list(waiting)}\n待推送: {utils.to_list(queue)}"
     )
@@ -590,7 +526,6 @@ async def publish(ids: Sequence[int | str]) -> str:
 
 
 async def update_name():
-    bot.getLogger().debug("更新群备注")
     waiting = Article.select().where(Article.tid == "wait")
     queue = Article.select().where(Article.tid == "queue")
     await bot.call_api(
@@ -606,14 +541,13 @@ async def update_name():
 @scheduler.scheduled_job(IntervalTrigger(hours=1))
 async def clear():
     async with lock:
-        # 注意:  遍历 dict 时不可直接修改, 先收集要移除的 key
         to_remove = []
         for sess in list(sessions.keys()):
             try:
                 a = Article.get_by_id(sessions[sess].id)
             except Exception:
                 continue
-            time_passed = (datetime.now() - a.time).total_seconds()
+            time_passed = time.time() - a.time.timestamp()
 
             if time_passed > 60 * 60 * 2:
                 to_remove.append(sess)
@@ -631,43 +565,6 @@ async def clear():
 
         for sess in to_remove:
             sessions.pop(sess, None)
-
-
-@bot.on_cmd(
-    "重置",
-    help_msg=(
-        "清空指定用户的投稿次数限制(包括当天匿名投稿)\n"
-        "示例: #重置 12345 67890  → 清空指定用户"
-    ),
-    targets=[config.GROUP],
-)
-async def reset_limits(msg: GroupMessage):
-    parts = msg.raw_message.split(" ")
-    if len(parts) <= 1:
-        await msg.reply("❌ 请带上用户ID, 例如:  #重置 10001")
-        return
-
-    user_ids = [int(uid) for uid in parts[1:] if uid.isdigit()]
-    if not user_ids:
-        await msg.reply("❌ 没有有效的用户ID")
-        return
-
-    today = datetime.now().date()
-    # 只清空计数表, 不删除实际投稿
-    SubmissionCount.delete().where(
-        (SubmissionCount.user_id.in_(user_ids)) & (SubmissionCount.date == today)
-    ).execute()
-
-    # 给被重置的用户发送私聊通知
-    for uid in user_ids:
-        try:
-            await bot.send_private(
-                uid, f"✅ 你的当天投稿次数限制已被管理员重置, 你今天可以继续投稿了! "
-            )
-        except Exception as e:
-            bot.getLogger().warning(f"给用户 {uid} 发送重置通知失败: {e}")
-
-    await msg.reply(f"✅ 已重置用户 {user_ids} 的投稿次数限制, 并已通知! ")
 
 
 @bot.on_cmd(
