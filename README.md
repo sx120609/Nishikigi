@@ -19,6 +19,11 @@
 3. 安装依赖 `$ ./install.sh`
 4. `$ ./run.sh &`
 
+# 鸣谢
+* [Campux](https://github.com/idoknow/Campux) 灵感来源
+* [OQQWall](https://github.com/gfhdhytghd/OQQWall) 借鉴了渲染图样式、QQ表情等
+* [NapCatQQ](https://github.com/NapNeko/NapCatQQ) PacketBackend 实现了许多其他 Bot 协议端实现做不到的事情
+
 ## 免责声明
 本项目为开源软件, 遵循 AGPL v3 许可证发布. 使用者在遵守开源协议的情况下可以自由地下载、修改和分发本项目的代码, 但必须另外遵守以下条款:  
 
