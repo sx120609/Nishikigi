@@ -597,7 +597,9 @@ async def delete(msg: GroupMessage):
         ids = parts[1:]
         for id in ids:
             article = Article.get_or_none(
-                (Article.id == id) & (Article.status == Status.CONFRIMED)
+                (Article.id == id)
+                & (Article.status != Status.CREATED)
+                & (Article.status != Status.PUBLISHED)
             )
             if not article:
                 await msg.reply(f"投稿 #{id} 不在队列中")
