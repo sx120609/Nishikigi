@@ -18,4 +18,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-botx = { git = "https://github.com/Web-Art-Online/BotX" }
+botx = { git = "https://github.com/Web-Art-Online/botx" }

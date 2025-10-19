@@ -527,19 +527,10 @@ async def reply(msg: GroupMessage):
 
 async def publish(ids: Sequence[int | str]) -> str:
     qzone = await bot.get_qzone()
-    text = ""
     images = []
     for id in ids:
-        a = Article.get_by_id(id)
-        text += (
-            f"#{id}"
-            + (f" " if a.anonymous else f" @{{uin:{a.sender_id},nick:null}}")
-            + "\n"
-        )
-        images.append(
-            await qzone.upload_image(utils.read_image(f"./data/{id}/image.png"))
-        )
-    tid = await qzone.publish(text, images=images)
+        images.append(await qzone.upload_raw_image(f"./data/{id}/image.png"))
+    tid = await qzone.publish("", images=images)
 
     for id in ids:
         Article.update({"tid": tid, "status": Status.PUBLISHED}).where(
