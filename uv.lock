@@ -39,7 +39,7 @@ wheels = [
 [[package]]
 name = "botx"
 version = "0.1.0"
-source = { git = "https://github.com/Web-Art-Online/botx#26983fd85a238343d583f4cf3001e1dc7e7a996a" }
+source = { git = "https://github.com/Web-Art-Online/botx#2759eb394409a34acb55ef34c6e20092c7066108" }
 dependencies = [
     { name = "colorlog" },
     { name = "dataclasses-json" },
