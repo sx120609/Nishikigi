@@ -3,6 +3,7 @@ import os
 import shutil
 import time
 from typing import Sequence
+from venv import logger
 
 
 import config
@@ -597,9 +598,7 @@ async def delete(msg: GroupMessage):
         ids = parts[1:]
         for id in ids:
             article = Article.get_or_none(
-                (Article.id == id)
-                & (Article.status != Status.CREATED)
-                & (Article.status != Status.PUBLISHED)
+                (Article.id == id) & (Article.status != Status.CREATED)
             )
             if not article:
                 await msg.reply(f"投稿 #{id} 不在队列中")
@@ -607,6 +606,19 @@ async def delete(msg: GroupMessage):
             Article.delete_by_id(id)
             if os.path.exists(f"./data/{id}"):
                 shutil.rmtree(f"./data/{id}")
+
+            if article.status == Status.PUBLISHED:
+                qzone = await bot.get_qzone()
+                album = await qzone.get_album(config.ALBUM)
+                if album == None:
+                    bot.getLogger().error(f"无法找到相册 {config.ALBUM}")
+                    continue
+                image = await qzone.get_image(album_id=album, name=article.tid)
+                if image == None:
+                    await msg.reply(f"无法找到投稿 #{id} 对应的空间动态图片")
+                    continue
+                await qzone.delete_image(image)
+
             await bot.send_private(
                 article.sender_id, f"你的投稿 #{id} 已被管理员删除😵‍💫"
             )
