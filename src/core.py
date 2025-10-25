@@ -525,21 +525,21 @@ async def reply(msg: GroupMessage):
         await msg.reply(f"已回复用户 {parts[1]}")
 
 
-async def publish(ids: Sequence[int | str]) -> str:
+async def publish(ids: Sequence[int | str]) -> list[str]:
     qzone = await bot.get_qzone()
-    images = []
-    for id in ids:
-        images.append(await qzone.upload_raw_image(f"./data/{id}/image.png"))
-    tid = await qzone.publish("", images=images)
+    names = await qzone.upload_raw_image(
+        album_name=config.ALBUM,
+        file_path=list(map(lambda id: f"./data/{id}/image.png", ids)),
+    )
 
-    for id in ids:
-        Article.update({"tid": tid, "status": Status.PUBLISHED}).where(
+    for i, id in enumerate(ids):
+        Article.update({"tid": names[i], "status": Status.PUBLISHED}).where(
             Article.id == id
         ).execute()
         await bot.send_private(
             Article.get_by_id(id).sender_id, f"您的投稿 #{id} 已被推送😋"
         )
-    return tid
+    return names
 
 
 async def update_name():

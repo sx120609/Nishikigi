@@ -10,6 +10,7 @@ WS_URL = os.getenv("WS_URL", "ws://localhost:3001")
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "")
 NAME = os.getenv("NAME", "TestBot")
 QUEUE = int(os.getenv("QUEUE", 4))
+ALBUM = os.getenv("ALBUM", "ALBUM")
 
 # 用于获取图片等的 FastAPI 服务
 HOST = "localhost"
