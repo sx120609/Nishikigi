@@ -447,7 +447,7 @@ async def view(msg: GroupMessage):
 
         await bot.send_group(
             group=config.GROUP,
-            msg=f"[CQ:reply,id={article.tid}]\n"
+            msg=f"[CQ:reply,id={article.tid}]"
             + f"#{id} 用户 {article.sender_name}({article.sender_id}) {anon_text}投稿{single_text}\n"
             + f"[CQ:image,file={image_url}]\n"
             + f"状态: {status}\n"
@@ -631,9 +631,6 @@ async def approve_article(ids: list, operator: int):
 
         operators = article.approve.split(",") if article.approve else []
         if str(operator) in operators:
-            await bot.send_group(
-                group=config.GROUP, msg=f"[CQ:at,qq={operator}] 你已经同意了 #{id}"
-            )
             continue
         operators.append(str(operator))
         await bot.send_group(config.GROUP, f"管理员 {operator} 通过了 #{id}")
