@@ -445,8 +445,9 @@ async def view(msg: GroupMessage):
         single_text = ", 要求单发" if article.single else ""
         image_url = get_file_url(f"./data/{id}/image.png")
 
-        await msg.reply(
-            f"[CQ:reply,id={article.tid}]\n"
+        await bot.send_group(
+            group=config.GROUP,
+            msg=f"[CQ:reply,id={article.tid}]\n"
             + f"#{id} 用户 {article.sender_name}({article.sender_id}) {anon_text}投稿{single_text}\n"
             + f"[CQ:image,file={image_url}]\n"
             + f"状态: {status}\n"
@@ -454,7 +455,7 @@ async def view(msg: GroupMessage):
                 ""
                 if status == Status.CONFRIMED or status == Status.CREATED
                 else f"审核人: {article.approve}"
-            )
+            ),
         )
 
 
@@ -505,8 +506,9 @@ async def reply(msg: GroupMessage):
 async def emoji_approve(notice: EmojiLike):
     for emoji in notice.likes:
         if emoji.emoji_id == 201:
-            a = Article.select().where(Article.tid == notice.message_id)[0]
-            await approve_article([a.id], operator=notice.user_id)
+            a = Article.select().where(Article.tid == notice.message_id)
+            if a:
+                await approve_article([a[0].id], operator=notice.user_id)
 
 
 async def publish(ids: Sequence[int | str]) -> list[str]:
