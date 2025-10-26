@@ -233,7 +233,7 @@ async def done(msg: PrivateMessage):
     image_url = get_file_url(f"./data/{session.id}/image.png")
     msg_id = await bot.send_group(
         config.GROUP,
-        f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]\n* 若同意通过该投稿, 请点击下方表情, 满 2 人同意才会通过.\n  (注意: 取消贴表情不会取消通过的操作)\n* 若要驳回, 请使用 #驳回",
+        f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]\n* 若同意通过该投稿, 请点击下方表情, 满 1 人同意才会通过.\n  (注意: 取消贴表情不会取消通过的操作)\n* 若要驳回, 请使用 #驳回",
     )
     await bot.call_api("set_msg_emoji_like", {"message_id": msg_id, "emoji_id": 201})
     Article.update({"status": Status.CONFRIMED, "tid": msg_id}).where(
@@ -639,7 +639,7 @@ async def approve_article(ids: list, operator: int, is_emoji: bool = False):
             Article.id == id
         ).execute()
 
-        if len(operators) <= 1:
+        if len(operators) < 1:
             continue
 
         await bot.send_group(config.GROUP, f"投稿 #{id} 进入待发送队列")
