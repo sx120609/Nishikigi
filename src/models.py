@@ -51,6 +51,8 @@ class Article(Model):
 
     status = EnumField(Status, default=Status.CREATED)
 
+    approve = TextField(null=True)
+
     class Meta:
         database = db
 

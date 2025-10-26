@@ -3,7 +3,6 @@ import os
 import shutil
 import time
 from typing import Sequence
-from venv import logger
 
 
 import config
@@ -20,7 +19,14 @@ from uvicorn import Config, Server
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from botx import Bot
-from botx.models import PrivateMessage, GroupMessage, User, PrivateRecall, FriendRequest
+from botx.models import (
+    PrivateMessage,
+    GroupMessage,
+    User,
+    PrivateRecall,
+    FriendRequest,
+    EmojiLike,
+)
 import httpx
 
 bot = Bot(
@@ -133,6 +139,8 @@ async def article(msg: PrivateMessage):
     ).id
 
     sessions[msg.sender] = Session(id=id, anonymous=anonymous)
+    if os.path.exists(f"./data/{id}"):
+        shutil.rmtree(f"./data/{id}")
     os.makedirs(f"./data/{id}", exist_ok=True)
 
     def status_words(value: bool) -> str:
@@ -219,18 +227,18 @@ async def done(msg: PrivateMessage):
         await msg.reply("请先发送:  \n\n#结束\n\n来查看效果图🤔")
         return
     sessions.pop(msg.sender)
-    Article.update({"status": Status.CONFRIMED}).where(
-        Article.id == session.id
-    ).execute()
     article = Article.get_by_id(session.id)
     anon_text = "匿名" if article.anonymous else ""
     single_text = ", 要求单发" if article.single else ""
     image_url = get_file_url(f"./data/{session.id}/image.png")
-    await bot.send_group(
+    msg_id = await bot.send_group(
         config.GROUP,
-        f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]",
+        f"#{session.id} 用户 {msg.sender} {anon_text}投稿{single_text}\n[CQ:image,file={image_url}]\n* 若同意通过该投稿, 请点击下方表情, 满 2 人同意才会通过.\n  (注意: 取消贴表情不会取消通过的操作)\n* 若要驳回, 请使用 #驳回",
     )
-
+    await bot.call_api("set_msg_emoji_like", {"message_id": msg_id, "emoji_id": 201})
+    Article.update({"status": Status.CONFRIMED, "tid": msg_id}).where(
+        Article.id == session.id,
+    ).execute()
     await msg.reply("已成功投稿, 请耐心等待管理员审核😘")
 
     await bot.call_api(
@@ -333,56 +341,15 @@ async def recall(r: PrivateRecall):
     help_msg="通过投稿. 可以一次通过多条, 以空格分割. 如 #通过 1 2",
     targets=[config.GROUP],
 )
-async def accept(msg: GroupMessage):
+async def approve(msg: GroupMessage):
     async with lock:
         parts = msg.raw_message.split(" ")
         if len(parts) < 2:
             await msg.reply("请带上要通过的投稿编号")
             return
-
         ids = parts[1:]
-        flag = False  # 只有有投稿加入队列时才判断是否推送
-        for id in ids:
-            article = Article.get_or_none(
-                (Article.id == id) & (Article.status == Status.CONFRIMED)
-            )
-            if not article:
-                await msg.reply(f"投稿 #{id} 不存在或已通过审核")
-                continue
-            if article.single:
-                await msg.reply(f"开始推送 #{id}")
-                await publish([id])
-                await msg.reply(f"投稿 #{id} 已经单发")
-                continue
-            else:
-                await bot.send_private(
-                    article.sender_id,
-                    f"您的投稿 {article} 已通过审核, 正在队列中等待发送",
-                )
-            flag = True
-            Article.update({Article.status: Status.QUEUE}).where(
-                Article.id == id
-            ).execute()
 
-        if flag:
-            articles = (
-                Article.select()
-                .where(Article.status == Status.QUEUE)
-                .order_by(Article.id.asc())
-                .limit(config.QUEUE)
-            )
-            if len(articles) < config.QUEUE:
-                await msg.reply(f"当前队列中有{len(articles)}个稿件, 暂不推送")
-            else:
-                await msg.reply(
-                    f"队列已积压{len(articles)}个稿件, 将推送前{config.QUEUE}个稿件..."
-                )
-                tid = await publish(list(map(lambda a: a.id, articles)))
-                await msg.reply(
-                    f"已推送{list(map(lambda a: a.id, articles))}\ntid: {tid}"
-                )
-
-        await update_name()
+        await approve_article(ids, operator=msg.sender.user_id)
 
 
 @bot.on_cmd(
@@ -477,9 +444,13 @@ async def view(msg: GroupMessage):
         image_url = get_file_url(f"./data/{id}/image.png")
 
         await msg.reply(
-            f"#{id} 用户 {article.sender_name}({article.sender_id}) {anon_text}投稿{single_text}\n"
+            f"[CQ:reply,id={article.tid}]\n"
+            + f"#{id} 用户 {article.sender_name}({article.sender_id}) {anon_text}投稿{single_text}\n"
             + f"[CQ:image,file={image_url}]\n"
-            + f"状态: {status}",
+            + f"状态: {status}\n"
+            + ""
+            if status == Status.CONFRIMED or status == Status.CREATED
+            else f"审核人: {article.approve}"
         )
 
 
@@ -524,6 +495,14 @@ async def reply(msg: GroupMessage):
         await msg.reply(f"无法回复用户 {parts[1]}\n请检查 QQ 号是否正确")
     else:
         await msg.reply(f"已回复用户 {parts[1]}")
+
+
+@bot.on_notice()
+async def emoji_approve(notice: EmojiLike):
+    for emoji in notice.likes:
+        if emoji.emoji_id == 201:
+            a = Article.select().where(Article.tid == notice.message_id)[0]
+            await approve_article([a.id], operator=notice.user_id)
 
 
 async def publish(ids: Sequence[int | str]) -> list[str]:
@@ -630,3 +609,73 @@ async def delete(msg: GroupMessage):
 @bot.on_request()
 async def friend_request(r: FriendRequest):
     await r.result(True)
+
+
+async def approve_article(ids: list, operator: int):
+    flag = False  # 只有有投稿加入队列时才判断是否推送
+    for id in ids:
+        article = Article.get_or_none(
+            (Article.id == id) & (Article.status == Status.CONFRIMED)
+        )
+        if not article:
+            await bot.send_group(
+                group=config.GROUP, msg=f"投稿 #{id} 不存在或已通过审核"
+            )
+            continue
+
+        operators = article.approve.split(",") if article.approve else []
+        if str(operator) in operators:
+            await bot.send_group(
+                group=config.GROUP, msg=f"[CQ:at,qq={operator}] 你已经同意了 #{id}"
+            )
+            continue
+        operators.append(str(operator))
+        await bot.send_group(config.GROUP, f"管理员 {operator} 通过了 #{id}")
+
+        Article.update({"approve": ",".join(operators)}).where(
+            Article.id == id
+        ).execute()
+
+        if len(operators) <= 1:
+            continue
+
+        if article.single:
+            await bot.send_group(group=config.GROUP, msg=f"开始推送 #{id}")
+            await publish([id])
+            await bot.send_group(group=config.GROUP, msg=f"投稿 #{id} 已经单发")
+            continue
+        else:
+            await bot.send_private(
+                article.sender_id,
+                f"您的投稿 {article} 已通过审核, 正在队列中等待发送",
+            )
+        flag = True
+        Article.update(
+            {
+                "status": Status.QUEUE,
+            }
+        ).where(Article.id == id).execute()
+
+    if flag:
+        articles = (
+            Article.select()
+            .where(Article.status == Status.QUEUE)
+            .order_by(Article.id.asc())
+            .limit(config.QUEUE)
+        )
+        if len(articles) < config.QUEUE:
+            await bot.send_group(
+                group=config.GROUP, msg=f"当前队列中有{len(articles)}个稿件, 暂不推送"
+            )
+        else:
+            await bot.send_group(
+                group=config.GROUP,
+                msg=f"队列已积压{len(articles)}个稿件, 将推送前{config.QUEUE}个稿件...",
+            )
+            tid = await publish(list(map(lambda a: a.id, articles)))
+            await bot.send_group(
+                group=config.GROUP,
+                msg=f"已推送{list(map(lambda a: a.id, articles))}\ntid: {tid}",
+            )
+
+    await update_name()
