@@ -373,7 +373,9 @@ async def refuse(msg: GroupMessage):
             await msg.reply(f"投稿 #{id} 不存在或已通过审核")
             return
 
-        Article.update({"status": Status.REJECTED}).where(Article.id == id).execute()
+        Article.update(
+            {"status": Status.REJECTED, "approve": msg.sender.user_id}
+        ).where(Article.id == id).execute()
         await bot.send_private(
             article.sender_id,
             f"抱歉, 你的投稿 #{id} 已被管理员驳回😵‍💫 理由: {' '.join(reason)}",
@@ -448,9 +450,11 @@ async def view(msg: GroupMessage):
             + f"#{id} 用户 {article.sender_name}({article.sender_id}) {anon_text}投稿{single_text}\n"
             + f"[CQ:image,file={image_url}]\n"
             + f"状态: {status}\n"
-            + ""
-            if status == Status.CONFRIMED or status == Status.CREATED
-            else f"审核人: {article.approve}"
+            + (
+                ""
+                if status == Status.CONFRIMED or status == Status.CREATED
+                else f"审核人: {article.approve}"
+            )
         )
 
 
