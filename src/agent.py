@@ -38,7 +38,7 @@ def is_known_command(raw: str) -> bool:
 
 async def ai_suggest_intent(raw: str) -> dict:
     prompt = (
-        "你是“苏州实验中学校墙”的智能助手, 任务是把用户短文本映射为墙的命令或友好回复。"
+        "你是“中国药科大学表白墙”的智能助手, 任务是把用户短文本映射为墙的命令或友好回复。"
         '最终请返回 JSON: {"intent_candidates":[{"label":"","suggestion":"","confidence":"","reason":""}]}\n\n'
         f"墙的指令和说明:  \n"
         f"#帮助:  查看使用说明。\n"
