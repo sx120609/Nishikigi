@@ -508,7 +508,7 @@ async def emoji_approve(notice: EmojiLike):
         if emoji.emoji_id == 201:
             a = Article.select().where(Article.tid == notice.message_id)
             if a:
-                await approve_article([a[0].id], operator=notice.user_id)
+                await approve_article([a[0].id], operator=notice.user_id, is_emoji=True)
 
 
 async def publish(ids: Sequence[int | str]) -> list[str]:
@@ -617,23 +617,23 @@ async def friend_request(r: FriendRequest):
     await r.result(True)
 
 
-async def approve_article(ids: list, operator: int):
+async def approve_article(ids: list, operator: int, is_emoji: bool = False):
     flag = False  # 只有有投稿加入队列时才判断是否推送
     for id in ids:
         article = Article.get_or_none(
             (Article.id == id) & (Article.status == Status.CONFRIMED)
         )
         if not article:
-            await bot.send_group(
-                group=config.GROUP, msg=f"投稿 #{id} 不存在或已通过审核"
-            )
+            if not is_emoji:
+                await bot.send_group(
+                    group=config.GROUP, msg=f"投稿 #{id} 不存在或已通过审核"
+                )
             continue
 
         operators = article.approve.split(",") if article.approve else []
         if str(operator) in operators:
             continue
         operators.append(str(operator))
-        await bot.send_group(config.GROUP, f"管理员 {operator} 通过了 #{id}")
 
         Article.update({"approve": ",".join(operators)}).where(
             Article.id == id
@@ -641,6 +641,8 @@ async def approve_article(ids: list, operator: int):
 
         if len(operators) <= 1:
             continue
+
+        await bot.send_group(config.GROUP, f"投稿 #{id} 进入待发送队列")
 
         if article.single:
             await bot.send_group(group=config.GROUP, msg=f"开始推送 #{id}")
